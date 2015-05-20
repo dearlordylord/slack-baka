@@ -11,7 +11,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 
 object SlackBaka {
-  
+
   case class ChatMessage(message: String, channel: String)
   case class BakaResponse(message: String, channel: String)
 
