@@ -16,19 +16,19 @@ class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor 
     log.info(s"dispatching response $response")
   }
   def receive = {
-    case ChatMessage(message, channel) =>
-      workers.map((w) => w ! ChatMessage(message, channel))
+    case cm@ChatMessage(message, channel, user, ts) =>
+      workers.map((w) => w ! cm)
     case BakaResponse(message, channel) =>
       responder ! BakaResponse(message, channel)
   }
 }
 
 trait BakaWorker extends Actor {
-  def handle(message: String): Future[Either[Unit, String]]
+  def handle(cm: ChatMessage): Future[Either[Unit, String]]
   def receive = {
-    case ChatMessage(message, channel) =>
+    case cm@ChatMessage(text, channel, user, ts) =>
       val back = sender()
-      handle(message).map {
+      handle(cm).map {
         case Left(_) => println("left")
         case Right(response) =>
           back ! BakaResponse(response, channel)

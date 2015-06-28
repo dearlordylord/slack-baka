@@ -1,5 +1,6 @@
 package com.firfi.slackbaka.workers
 
+import com.firfi.slackbaka.SlackBaka.ChatMessage
 import dispatch.{Http, url, Defaults, as}
 
 import scala.concurrent.Future
@@ -27,9 +28,9 @@ class PonyWorker extends BakaWorker {
     Map("min_score"->"88", "random_image"->"true"))
 
   val pattern = """(?i).*\bпони\b.*""".r
-  override def handle(text: String): Future[Either[Unit, String]] = {
+  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
     import scala.util.parsing.json._
-    text match {
+    cm.message match {
       case pattern() => request("search", randomQuery).map((res) => {
         // num.zero
         JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
