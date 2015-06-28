@@ -3,7 +3,7 @@ package com.firfi.slackbaka.workers
 import com.firfi.slackbaka.SlackBaka.ChatMessage
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.indexes.{IndexType, Index}
-import reactivemongo.bson.BSONDocument
+import reactivemongo.bson.{BSONDateTime, BSONDocument}
 import scala.concurrent.Future
 import reactivemongo.api._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -34,12 +34,15 @@ class HistoryWorker extends BakaWorker {
       }
       _ <- c.indexesManager.ensure(Index(Seq("ts"->IndexType.Ascending, "channel"->IndexType.Ascending), unique=true))
       _ <- c.indexesManager.ensure(Index(Seq("message"->IndexType.Text)))
+      _ <- c.indexesManager.ensure(Index(Seq("timestamp"->IndexType.Ascending)))
       _ <- {
+        val timestamp = cm.ts.split('.')(0).toLong
         c.insert(BSONDocument(
           "message" -> cm.message,
           "user" -> cm.user,
           "channel" -> cm.channel,
-          "ts" -> cm.ts
+          "ts" -> cm.ts,
+          "timestamp" -> BSONDateTime(timestamp)
         ))
       }
     } yield Left() // 'Right' will trigger message back, we don't need it

@@ -12,9 +12,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor {
   val log = Logging(context.system, this)
-  def dispatch(response: String): Unit = {
-    log.info(s"dispatching response $response")
-  }
   def receive = {
     case cm@ChatMessage(message, channel, user, ts) =>
       workers.map((w) => w ! cm)
@@ -24,12 +21,13 @@ class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor 
 }
 
 trait BakaWorker extends Actor {
+  val log = Logging(context.system, this)
   def handle(cm: ChatMessage): Future[Either[Unit, String]]
   def receive = {
     case cm@ChatMessage(text, channel, user, ts) =>
       val back = sender()
       handle(cm).map {
-        case Left(_) => println("left")
+        case Left(_) => log.info("left")
         case Right(response) =>
           back ! BakaResponse(response, channel)
       }
