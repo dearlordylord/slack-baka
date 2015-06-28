@@ -12,6 +12,10 @@ class PonyWorker extends BakaWorker {
 
   val API_ROOT = "https://derpiboo.ru/"
 
+  // comma-separated channek _IDS_
+  val ponyAllowedChannels: Set[String] =
+    Option(System.getenv("PONY_ALLOWED_CHANNELS")).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+
   def request(api: String, query: String = ""): Future[String] = {
     val path = api + ".json?" + query
     val svc = url(API_ROOT + path)
@@ -31,16 +35,17 @@ class PonyWorker extends BakaWorker {
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
     import scala.util.parsing.json._
     cm.message match {
-      case pattern() => request("search", randomQuery).map((res) => {
-        // num.zero
-        JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
-      }) // TODO json parse errors
-      .flatMap((id) => {
-        request(id.toString)
-      }).map((res) => {
-        "https:" + JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("image").toString
-      })
-      .map(Right.apply)
+      case pattern() if ponyAllowedChannels.contains(cm.channel) =>
+        request("search", randomQuery).map((res) => {
+          // num.zero
+          JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
+        }) // TODO json parse errors
+        .flatMap((id) => {
+          request(id.toString)
+        }).map((res) => {
+          "https:" + JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("image").toString
+        })
+        .map(Right.apply)
       case _ => Future { Left() }
     }
   }
