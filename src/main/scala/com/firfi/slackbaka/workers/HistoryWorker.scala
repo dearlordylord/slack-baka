@@ -36,7 +36,7 @@ class HistoryWorker extends BakaWorker {
       _ <- c.indexesManager.ensure(Index(Seq("message"->IndexType.Text)))
       _ <- c.indexesManager.ensure(Index(Seq("timestamp"->IndexType.Ascending)))
       _ <- {
-        val timestamp = cm.ts.split('.')(0).toLong
+        val timestamp = cm.ts.split('.')(0).toLong * 1000
         c.insert(BSONDocument(
           "message" -> cm.message,
           "user" -> cm.user,
