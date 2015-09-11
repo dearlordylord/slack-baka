@@ -3,12 +3,14 @@ package com.firfi.slackbaka.workers
 import com.firfi.slackbaka.SlackBaka.ChatMessage
 import dispatch.{Http, url, Defaults, as}
 
+import akka.actor.ActorRef
+
 import scala.concurrent.Future
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 
 
-class PonyWorker extends BakaWorker {
+class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val API_ROOT = "https://derpiboo.ru/"
 

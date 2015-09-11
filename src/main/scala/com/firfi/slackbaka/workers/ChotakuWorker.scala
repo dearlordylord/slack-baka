@@ -3,12 +3,14 @@ package com.firfi.slackbaka.workers
 import com.firfi.slackbaka.SlackBaka.ChatMessage
 import dispatch.{Http, url, Defaults, as}
 
+import akka.actor.ActorRef
+
 import scala.concurrent.Future
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 
 
-class ChotakuWorker extends BakaWorker {
+class ChotakuWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val API_ROOT = "http://api.4otaku.org/"
   val SEARCH_ROOT = API_ROOT + "read/art/list?"
