@@ -11,13 +11,11 @@ import akka.actor.{ActorRef, Actor, Props}
 import akka.event.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor {
+class BakaDispatcher(workers: Set[ActorRef]) extends Actor {
   val log = Logging(context.system, this)
   def receive = {
     case cm@ChatMessage(message, channel, user, ts) =>
       workers.map((w) => w ! cm)
-    case BakaResponse(message, channel) =>
-      responder ! BakaResponse(message, channel)
   }
 }
 
@@ -46,7 +44,7 @@ trait BakaWorkerUtility {
 
 }
 
-trait BakaWorker extends Actor with BakaWorkerUtility {
+abstract class BakaWorker(responder: ActorRef) extends Actor with BakaWorkerUtility {
   val log = Logging(context.system, this)
   def handle(cm: ChatMessage): Future[Either[Unit, String]]
   def receive = {
@@ -55,7 +53,7 @@ trait BakaWorker extends Actor with BakaWorkerUtility {
       handle(cm).map {
         case Left(_) => log.info("left")
         case Right(response) =>
-          back ! BakaResponse(response, channel)
+          responder ! BakaResponse(response, channel)
       }
   }
 }

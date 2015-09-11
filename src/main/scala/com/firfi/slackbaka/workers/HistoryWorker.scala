@@ -9,7 +9,9 @@ import reactivemongo.api._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
 
-class HistoryWorker extends BakaWorker {
+import akka.actor.ActorRef
+
+class HistoryWorker(responder: ActorRef) extends BakaWorker(responder) {
   val MONGOLAB_DB = System.getenv("MONGOLAB_DB")
   val driver = new MongoDriver
   val uri = System.getenv("MONGOLAB_URI")

@@ -2,7 +2,7 @@ package com.firfi.slackbaka
 
 import akka.actor.Actor.Receive
 import akka.actor.{Actor, Props, ActorSystem}
-import com.firfi.slackbaka.workers.{HistoryWorker, PonyWorker, BakaWorker, BakaDispatcher, ChotakuWorker}
+import com.firfi.slackbaka.workers.{HistoryWorker, PonyWorker, ChotakuWorker, BakaWorker, BakaDispatcher}
 import slack.api.SlackApiClient
 import slack.rtm.SlackRtmClient
 
@@ -28,9 +28,11 @@ object SlackBaka {
     implicit val system = ActorSystem("Baka")
     val client = SlackRtmClient(System.getenv("SLACK_TOKEN"))
 
+    val responder = system.actorOf(Props(new BakaResponder(client)));
+
     val dispatcher = system.actorOf(Props(new BakaDispatcher(workers.map((worker) => {
-      system.actorOf(Props(worker))
-    }), system.actorOf(Props(new BakaResponder(client))))))
+      system.actorOf(Props(worker, responder))
+    }))))
     client.onMessage { message =>
       dispatcher ! ChatMessage(message.text, message.channel, message.user, message.ts)
     }
