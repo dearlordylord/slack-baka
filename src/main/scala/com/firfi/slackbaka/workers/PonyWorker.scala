@@ -13,8 +13,8 @@ class PonyWorker extends BakaWorker {
   val API_ROOT = "https://derpiboo.ru/"
 
   // comma-separated channek _IDS_
-  val ponyAllowedChannels: Set[String] =
-    Option(System.getenv("PONY_ALLOWED_CHANNELS")).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+  val ponyAllowedChannels: Set[String] = commaEnvSet("PONY_ALLOWED_CHANNELS")
+  val extraTags: Set[String] = commaEnvSet("PONY_EXTRA_TAGS")
 
   def request(api: String, query: String = ""): Future[String] = {
     val path = api + ".json?" + query
@@ -28,7 +28,7 @@ class PonyWorker extends BakaWorker {
     (params ++ Map[String, String](("q", tagsString))).map({case (k, v) => k + "=" + v}).mkString("&")
   }
 
-  val randomQuery = searchQuery(Seq("-suggestive", "-explicit", "-semi-grimdark", "-grimdark", "safe"),
+  val randomQuery = searchQuery(Seq("-suggestive", "-explicit", "-semi-grimdark", "-grimdark", "safe") ++ extraTags,
     Map("min_score"->"88", "random_image"->"true"))
 
   val pattern = """(?i).*\bпони\b.*""".r

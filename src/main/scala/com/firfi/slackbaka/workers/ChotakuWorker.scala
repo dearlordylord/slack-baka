@@ -16,11 +16,10 @@ class ChotakuWorker extends BakaWorker {
   val IMAGE_ROOT = "http://images.4otaku.org/art/"
 
   // comma-separated channel _IDS_
-  val chotakuAllowedChannels: Set[String] =
-    Option(System.getenv("CHOTAKU_ALLOWED_CHANNELS")).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+  val chotakuAllowedChannels: Set[String] = commaEnvSet("CHOTAKU_ALLOWED_CHANNELS")
 
   def request(api: String, params: Map[String, String] = Map.empty): Future[String] = {
-    val query = params.map({case (k, v) => k + "=" + v}).mkString("&");
+    val query = params.map({case (k, v) => k + "=" + v}).mkString("&")
     val svc = url(api + query)
     Http(svc OK as.String)
   }

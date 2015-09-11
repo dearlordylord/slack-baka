@@ -20,7 +20,13 @@ class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor 
   }
 }
 
-trait BakaWorker extends Actor {
+trait BakaWorkerUtility {
+  protected def commaEnvSet(varName: String): Set[String] = {
+    Option(System.getenv(varName)).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+  }
+}
+
+trait BakaWorker extends Actor with BakaWorkerUtility {
   val log = Logging(context.system, this)
   def handle(cm: ChatMessage): Future[Either[Unit, String]]
   def receive = {
