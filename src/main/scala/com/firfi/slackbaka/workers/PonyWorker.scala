@@ -10,7 +10,7 @@ import scala.concurrent._
 import ExecutionContext.Implicits.global
 
 
-class PonyWorker(responder: ActorRef) extends BakaWorker(responder) {
+class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val API_ROOT = "https://derpiboo.ru/"
 

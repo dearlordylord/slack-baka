@@ -10,7 +10,7 @@ import scala.concurrent._
 import ExecutionContext.Implicits.global
 
 
-class ChotakuWorker(responder: ActorRef) extends BakaWorker(responder) {
+class ChotakuWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val API_ROOT = "http://api.4otaku.org/"
   val SEARCH_ROOT = API_ROOT + "read/art/list?"

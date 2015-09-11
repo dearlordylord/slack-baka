@@ -9,9 +9,7 @@ import reactivemongo.api._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
 
-import akka.actor.ActorRef
-
-class HistoryWorker(responder: ActorRef) extends BakaWorker(responder) {
+class HistoryWorker(none: Any) extends BakaWorker {
   val MONGOLAB_DB = System.getenv("MONGOLAB_DB")
   val driver = new MongoDriver
   val uri = System.getenv("MONGOLAB_URI")
@@ -23,8 +21,7 @@ class HistoryWorker(responder: ActorRef) extends BakaWorker(responder) {
   val db = connection.map((c) => c(MONGOLAB_DB))
   val messages = db.map((db_) => db_[BSONCollection]("messages"))
 
-
-  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
+  override def handle(cm: ChatMessage) = {
     /*
     `The second are the message timestamps, which always use the "ts" name (eg: "ts", "event_ts"). These are returned as strings. Even though they look like floats, they should always be stored and compared as strings - because floats occasionally lose precision and that would be bad here.`
     `A message in a channel will have a unique TS for that channel (two messages in two different channels can have the same TS)`
@@ -37,7 +34,7 @@ class HistoryWorker(responder: ActorRef) extends BakaWorker(responder) {
       _ <- c.indexesManager.ensure(Index(Seq("ts"->IndexType.Ascending, "channel"->IndexType.Ascending), unique=true))
       _ <- c.indexesManager.ensure(Index(Seq("message"->IndexType.Text)))
       _ <- c.indexesManager.ensure(Index(Seq("timestamp"->IndexType.Ascending)))
-      _ <- {
+      } {
         val timestamp = cm.ts.split('.')(0).toLong * 1000
         c.insert(BSONDocument(
           "message" -> cm.message,
@@ -47,6 +44,5 @@ class HistoryWorker(responder: ActorRef) extends BakaWorker(responder) {
           "timestamp" -> BSONDateTime(timestamp)
         ))
       }
-    } yield Left() // 'Right' will trigger message back, we don't need it
   }
 }

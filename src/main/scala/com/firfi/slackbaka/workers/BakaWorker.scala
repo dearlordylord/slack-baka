@@ -44,12 +44,21 @@ trait BakaWorkerUtility {
 
 }
 
-abstract class BakaWorker(responder: ActorRef) extends Actor with BakaWorkerUtility {
-  val log = Logging(context.system, this)
-  def handle(cm: ChatMessage): Future[Either[Unit, String]]
+trait BakaWorker extends Actor with BakaWorkerUtility {
+  def handle(cm: ChatMessage)
+
   def receive = {
     case cm@ChatMessage(text, channel, user, ts) =>
-      val back = sender()
+      handle(cm)
+  }
+}
+
+abstract class BakaRespondingWorker(responder: ActorRef) extends Actor with BakaWorkerUtility {
+  val log = Logging(context.system, this)
+  def handle(cm: ChatMessage): Future[Either[Unit, String]]
+
+  def receive = {
+    case cm@ChatMessage(text, channel, user, ts) =>
       handle(cm).map {
         case Left(_) => log.info("left")
         case Right(response) =>
