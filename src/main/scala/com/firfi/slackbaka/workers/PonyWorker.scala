@@ -13,8 +13,8 @@ class PonyWorker extends BakaWorker {
   val API_ROOT = "https://derpiboo.ru/"
 
   // comma-separated channek _IDS_
-  val ponyAllowedChannels: Set[String] =
-    Option(System.getenv("PONY_ALLOWED_CHANNELS")).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+  val ponyAllowedChannels: Set[String] = commaEnvToSet("PONY_ALLOWED_CHANNELS")
+  val extraEnvTags: Set[String] = commaEnvToSet("PONY_EXTRA_TAGS")
 
   def request(api: String, query: String = ""): Future[String] = {
     val path = api + ".json?" + query
@@ -28,15 +28,18 @@ class PonyWorker extends BakaWorker {
     (params ++ Map[String, String](("q", tagsString))).map({case (k, v) => k + "=" + v}).mkString("&")
   }
 
-  val randomQuery = searchQuery(Seq("-suggestive", "-explicit", "-semi-grimdark", "-grimdark", "safe"),
-    Map("min_score"->"88", "random_image"->"true"))
+  private def randomQuery(extraRequestTags: Set[String]): String = {
+    searchQuery(Seq("-suggestive", "-explicit", "-semi-grimdark", "-grimdark", "safe") ++ extraEnvTags ++ extraRequestTags,
+      Map("min_score"->"88", "random_image"->"true"))
+  }
 
-  val pattern = """(?i).*\bпони\b.*""".r
+  val pattern = """(?i).*\bпони\b(.*)""".r
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
     import scala.util.parsing.json._
     cm.message match {
-      case pattern() if ponyAllowedChannels.contains(cm.channel) =>
-        request("search", randomQuery).map((res) => {
+      case pattern(tagsFollowingPony) if ponyAllowedChannels.contains(cm.channel) =>
+        val extraTags = commaSeparatedToSet(tagsFollowingPony).map(encodeURIComponent) // and sanitize dat shit
+        request("search", randomQuery(extraTags)).map((res) => {
           // num.zero
           JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
         }) // TODO json parse errors
