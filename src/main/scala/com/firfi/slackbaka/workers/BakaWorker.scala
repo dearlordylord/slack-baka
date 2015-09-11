@@ -1,5 +1,6 @@
 package com.firfi.slackbaka.workers
 
+
 import akka.actor.Actor.Receive
 import com.firfi.slackbaka.SlackBaka
 import com.firfi.slackbaka.SlackBaka.{BakaResponder, BakaResponse, ChatMessage}
@@ -21,12 +22,28 @@ class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor 
 }
 
 trait BakaWorkerUtility {
+
+  import java.net.URLEncoder
+
   protected def commaEnvToSet(varName: String): Set[String] = {
     commaSeparatedToSet(Option(System.getenv(varName)).getOrElse(""))
   }
+
   protected def commaSeparatedToSet(s: String): Set[String] = {
     s.split(",").map(_.trim).filter((s) => s.nonEmpty).toSet
   }
+
+  // https://github.com/dispatch/reboot/issues/23#issuecomment-9663215
+  protected def encodeURIComponent(s: String): String = {
+    URLEncoder.encode(s, "UTF-8").
+      replaceAll("\\+", "%20").
+      replaceAll("\\%21", "!").
+      replaceAll("\\%27", "'").
+      replaceAll("\\%28", "(").
+      replaceAll("\\%29", ")").
+      replaceAll("\\%7E", "~")
+  }
+
 }
 
 trait BakaWorker extends Actor with BakaWorkerUtility {

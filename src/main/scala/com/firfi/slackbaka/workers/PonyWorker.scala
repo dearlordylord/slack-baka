@@ -38,7 +38,7 @@ class PonyWorker extends BakaWorker {
     import scala.util.parsing.json._
     cm.message match {
       case pattern(tagsFollowingPony) if ponyAllowedChannels.contains(cm.channel) =>
-        val extraTags = commaSeparatedToSet(tagsFollowingPony)
+        val extraTags = commaSeparatedToSet(tagsFollowingPony).map(encodeURIComponent) // and sanitize dat shit
         request("search", randomQuery(extraTags)).map((res) => {
           // num.zero
           JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
