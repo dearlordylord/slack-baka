@@ -21,8 +21,11 @@ class BakaDispatcher(workers: Set[ActorRef], responder: ActorRef) extends Actor 
 }
 
 trait BakaWorkerUtility {
-  protected def commaEnvSet(varName: String): Set[String] = {
-    Option(System.getenv(varName)).getOrElse("").split(",").filter((s) => s.nonEmpty).toSet
+  protected def commaEnvToSet(varName: String): Set[String] = {
+    commaSeparatedToSet(Option(System.getenv(varName)).getOrElse(""))
+  }
+  protected def commaSeparatedToSet(s: String): Set[String] = {
+    s.split(",").map(_.trim).filter((s) => s.nonEmpty).toSet
   }
 }
 
