@@ -9,6 +9,11 @@ import scala.concurrent.Future
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 
+object PonyLoader extends BakaLoader {
+  override def getWorkers:Set[Class[_]] = {
+    Set(classOf[PonyWorker])
+  }
+}
 
 class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 

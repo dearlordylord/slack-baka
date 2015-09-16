@@ -1,6 +1,5 @@
 package com.firfi.slackbaka.workers
 
-
 import akka.actor.Actor.Receive
 import com.firfi.slackbaka.SlackBaka
 import com.firfi.slackbaka.SlackBaka.{BakaResponder, BakaResponse, ChatMessage}
@@ -10,6 +9,10 @@ import scala.concurrent.Future
 import akka.actor.{ActorRef, Actor, Props}
 import akka.event.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
+
+abstract class BakaLoader {
+  def getWorkers:Set[Class[_]]
+}
 
 class BakaDispatcher(workers: Set[ActorRef]) extends Actor {
   val log = Logging(context.system, this)
