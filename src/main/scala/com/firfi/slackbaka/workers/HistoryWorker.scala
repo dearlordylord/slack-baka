@@ -9,6 +9,12 @@ import reactivemongo.api._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
 
+object HistoryLoader extends BakaLoader {
+  override def getWorkers:Set[Class[_]] = {
+    Set(classOf[HistoryWorker])
+  }
+}
+
 class HistoryWorker(none: Any) extends BakaWorker {
   val MONGOLAB_DB = System.getenv("MONGOLAB_DB")
   val driver = new MongoDriver
