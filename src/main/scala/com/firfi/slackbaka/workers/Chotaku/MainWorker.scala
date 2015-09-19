@@ -1,7 +1,6 @@
 package com.firfi.slackbaka.workers.chotaku
 
 import com.firfi.slackbaka.SlackBaka.ChatMessage
-import dispatch.{Http, url, Defaults, as}
 
 import akka.actor.ActorRef
 

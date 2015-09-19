@@ -1,9 +1,9 @@
 package com.firfi.slackbaka.workers.chotaku
 
-import com.firfi.slackbaka.workers.{chotaku, BakaRespondingWorker}
+import com.firfi.slackbaka.workers.BakaRespondingWorker
 import com.firfi.slackbaka.SlackBaka.ChatMessage
 
-import dispatch.{Http, url, Defaults, as}
+import dispatch.{Http, url, as}
 
 import akka.actor.ActorRef
 
