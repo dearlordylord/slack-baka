@@ -9,17 +9,19 @@ import akka.actor.ActorRef
 
 import scala.concurrent.Future
 import scala.concurrent._
+import scala.util.matching.Regex
 import ExecutionContext.Implicits.global
 
 
 abstract class AbstractWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
-  val BASE_PREFIX = "чотач"
-  val MODULE_PREFIX = ""
+  val BASE_PREFIX = "чотач "
   val API_ROOT = "http://api.4otaku.org/"
   val IMAGE_ROOT = "http://images.4otaku.org/art/"
 
   val chotakuAllowedChannels: Set[String] = commaEnvToSet("CHOTAKU_ALLOWED_CHANNELS")
+
+  def getModuleRegex: Regex
 
   def request(api: String, params: Map[String, String] = Map.empty): Future[String] = {
     val query = params.map({case (k, v) => k + "=" + v}).mkString("&")
@@ -34,33 +36,18 @@ abstract class AbstractWorker(responder: ActorRef) extends BakaRespondingWorker(
     data.head.asInstanceOf[Map[String, String]]
   }
 
-  def getMessageParams(message: String): Array[String] = {
-    // Clean up prefixes
-    var result = message
-    Set(BASE_PREFIX, MODULE_PREFIX).foreach((prefix) => {
-      var search = prefix + " "
-      // Clean up only from beginning of the string
-      if (result.indexOf(search) == 0)
-        result = result.substring(search.length)
-    })
-    result.split(" ")
-  }
+  def process(cm: ChatMessage, params: Regex.Match): Future[Either[Unit, String]]
 
-  def isOwner(cm: ChatMessage): Boolean = {
-    val check = BASE_PREFIX + " " + MODULE_PREFIX + " "
-    if (cm.message.indexOf(check) == 0)
-      true
-    else
-      false 
-  }
-
-  def process(cm: ChatMessage): Future[Either[Unit, String]]
-
-  override def handle(cm: ChatMessage) = {
-    if (chotakuAllowedChannels.contains(cm.channel) && isOwner(cm)) {
-      process(cm)
-    } else {
-      Future { Left() }
+  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
+    if (chotakuAllowedChannels.contains(cm.channel) && cm.message.indexOf(BASE_PREFIX) == 0) {
+      val payload = cm.message.substring(BASE_PREFIX.length)
+      val moduleMatch = getModuleRegex.findFirstMatchIn(payload)
+      if (moduleMatch.nonEmpty) {
+        return process(cm, moduleMatch.get)
+      }
     }
+
+    // Module was not matched by message or channel, yield left
+    Future { Left() }
   }
 }

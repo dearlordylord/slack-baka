@@ -6,16 +6,16 @@ import akka.actor.ActorRef
 
 import scala.concurrent.Future
 import scala.concurrent._
+import scala.util.matching.Regex
 import ExecutionContext.Implicits.global
 
-class MainWorker(responder: ActorRef) extends AbstractWorker(responder) {
+class SearchWorker(responder: ActorRef) extends AbstractWorker(responder) {
 
   val SEARCH_ROOT = API_ROOT + "read/art/list?"
   val DETAILS_ROOT = API_ROOT + "read/art?"
 
-  // This worker also processes plain "чотач" command
-  override def isOwner(cm: ChatMessage): Boolean = {
-    super.isOwner(cm) || cm.message == BASE_PREFIX
+  def getModuleRegex: Regex = {
+    new Regex("""найди\s*(.*)""", "tags")
   }
 
   // TODO: learn a little more about scala and implement filters as an objects
@@ -41,7 +41,7 @@ class MainWorker(responder: ActorRef) extends AbstractWorker(responder) {
     "filter[4][value]"->"1"
   )
 
-  override def process(cm: ChatMessage): Future[Either[Unit, String]]  = {
+  override def process(cm: ChatMessage, params: Regex.Match): Future[Either[Unit, String]]  = {
     request(SEARCH_ROOT, randomQuery).map((res) => {
       parse(res)("id")
     }) // TODO json parse errors
