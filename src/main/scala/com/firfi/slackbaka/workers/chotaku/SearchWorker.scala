@@ -43,14 +43,15 @@ class SearchWorker(responder: ActorRef) extends AbstractWorker(responder) {
 
   override def process(cm: ChatMessage, params: Regex.Match): Future[Either[Unit, String]]  = {
     request(SEARCH_ROOT, randomQuery).map((res) => {
-      parse(res)("id")
+      val response = new Response(res)
+      response.data.get("id")
     }) // TODO json parse errors
     .flatMap((id) => {
-      request(DETAILS_ROOT, Map("id" -> id))
+      request(DETAILS_ROOT, Map("id" -> id.asInstanceOf[String]))
     }).map((res) => {
-      val parsed = parse(res)
-      val image = if (parsed("resized") == "1") parsed("md5") + "_resize.jpg"
-        else parsed("md5") + "." + parsed("ext")
+      val response = new Response(res)
+      val image = if (response.data.get("resized") == "1") response.data.get("md5") + "_resize.jpg"
+        else response.data.get("md5") + "." + response.data.get("ext")
       IMAGE_ROOT + image
     })
     .map(Right.apply)

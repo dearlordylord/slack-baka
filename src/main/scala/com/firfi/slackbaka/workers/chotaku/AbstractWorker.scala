@@ -12,7 +12,6 @@ import scala.concurrent._
 import scala.util.matching.Regex
 import ExecutionContext.Implicits.global
 
-
 abstract class AbstractWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val BASE_PREFIX = "чотач "
@@ -27,13 +26,6 @@ abstract class AbstractWorker(responder: ActorRef) extends BakaRespondingWorker(
     val query = params.map({case (k, v) => k + "=" + v}).mkString("&")
     val svc = url(api + query)
     Http(svc OK as.String)
-  }
-
-  def parse(res: String): Map[String, String] = {
-    import scala.util.parsing.json._
-
-    val data = JSON.parseFull(res).get.asInstanceOf[Map[String, List[Any]]]("data")
-    data.head.asInstanceOf[Map[String, String]]
   }
 
   def process(cm: ChatMessage, params: Regex.Match): Future[Either[Unit, String]]
