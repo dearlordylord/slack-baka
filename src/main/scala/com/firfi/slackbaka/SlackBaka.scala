@@ -1,14 +1,11 @@
 package com.firfi.slackbaka
 
-import akka.actor.Actor.Receive
 import akka.actor.{Actor, Props, ActorSystem}
-import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, ChotakuLoader, BakaWorker, BakaDispatcher}
-import slack.api.SlackApiClient
+import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, ChotakuLoader, BakaDispatcher}
 import slack.rtm.SlackRtmClient
 
 // Async
 import scala.concurrent.ExecutionContext.Implicits.global
-
 
 object SlackBaka {
 
