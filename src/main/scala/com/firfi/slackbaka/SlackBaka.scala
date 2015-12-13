@@ -1,9 +1,7 @@
 package com.firfi.slackbaka
 
-import akka.actor.Actor.Receive
 import akka.actor.{Actor, Props, ActorSystem}
-import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, ChotakuLoader, BakaWorker, BakaDispatcher}
-import slack.api.SlackApiClient
+import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, BakaDispatcher}
 import slack.rtm.SlackRtmClient
 
 // Async
@@ -15,7 +13,7 @@ object SlackBaka {
   case class ChatMessage(message: String, channel: String, user: String, ts: String)
   case class BakaResponse(message: String, channel: String)
 
-  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ ChotakuLoader.getWorkers
+  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers
 
   class BakaResponder(slackRtmClient: SlackRtmClient) extends Actor {
     override def receive: Receive = {
