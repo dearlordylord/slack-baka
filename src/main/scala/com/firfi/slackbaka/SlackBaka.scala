@@ -1,7 +1,9 @@
 package com.firfi.slackbaka
 
 import akka.actor.{Actor, Props, ActorSystem}
+import com.firfi.slackbaka.listeners.WelcomeListener
 import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, BakaDispatcher}
+import slack.models.SlackEvent
 import slack.rtm.SlackRtmClient
 
 // Async
@@ -11,6 +13,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 object SlackBaka {
 
   case class ChatMessage(message: String, channel: String, user: String, ts: String)
+
   case class BakaResponse(message: String, channel: String)
 
   val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers
@@ -34,6 +37,10 @@ object SlackBaka {
     client.onMessage { message =>
       dispatcher ! ChatMessage(message.text, message.channel, message.user, message.ts)
     }
+
+    val state = client.state
+    val generalId = state.getChannelIdForName("general")
+    generalId.map{id => client.addEventListener(system.actorOf(Props(new WelcomeListener(responder, id))))} // TODO generalise
   }
 }
 

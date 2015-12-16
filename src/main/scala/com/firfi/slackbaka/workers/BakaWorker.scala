@@ -1,12 +1,10 @@
 package com.firfi.slackbaka.workers
 
-import akka.actor.Actor.Receive
-import com.firfi.slackbaka.SlackBaka
-import com.firfi.slackbaka.SlackBaka.{BakaResponder, BakaResponse, ChatMessage}
+import com.firfi.slackbaka.SlackBaka.{BakaResponse, ChatMessage}
 
 import scala.concurrent.Future
 
-import akka.actor.{ActorRef, Actor, Props}
+import akka.actor.{ActorRef, Actor}
 import akka.event.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
 

@@ -40,15 +40,15 @@ class HistoryWorker(none: Any) extends BakaWorker {
       _ <- c.indexesManager.ensure(Index(Seq("ts"->IndexType.Ascending, "channel"->IndexType.Ascending), unique=true))
       _ <- c.indexesManager.ensure(Index(Seq("message"->IndexType.Text)))
       _ <- c.indexesManager.ensure(Index(Seq("timestamp"->IndexType.Ascending)))
-      } {
-        val timestamp = cm.ts.split('.')(0).toLong * 1000
-        c.insert(BSONDocument(
-          "message" -> cm.message,
-          "user" -> cm.user,
-          "channel" -> cm.channel,
-          "ts" -> cm.ts,
-          "timestamp" -> BSONDateTime(timestamp)
-        ))
-      }
+    } {
+      val timestamp = cm.ts.split('.')(0).toLong * 1000
+      c.insert(BSONDocument(
+        "message" -> cm.message,
+        "user" -> cm.user,
+        "channel" -> cm.channel,
+        "ts" -> cm.ts,
+        "timestamp" -> BSONDateTime(timestamp)
+      ))
+    }
   }
 }
