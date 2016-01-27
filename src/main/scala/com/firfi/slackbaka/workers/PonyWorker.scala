@@ -37,10 +37,11 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   private def randomQuery(extraRequestTags: Set[String]): String = {
     searchQuery(
-      (Seq("-suggestive", "-explicit", "-semi-grimdark", "-grimdark", "safe") ++ extraEnvTags ++ extraRequestTags)
+      (extraEnvTags ++ extraRequestTags)
       .foldLeft(Seq.empty[String])({case (acc, tag) =>
-        (if (tag.startsWith("-")) acc.filter(_ != tag.substring(1))
-        else acc.filter(_ != s"-$tag")) :+ tag
+        val filtered = if (tag.startsWith("-")) acc.filter(_ != tag.substring(1))
+          else acc.filter(_ != s"-$tag")
+        if (filtered.length == acc.length) filtered :+ tag else filtered
       }),
       Map("min_score"->"88", "random_image"->"true"))
   }
