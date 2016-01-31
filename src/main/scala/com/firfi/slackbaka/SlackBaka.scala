@@ -2,7 +2,7 @@ package com.firfi.slackbaka
 
 import akka.actor.{Actor, Props, ActorSystem}
 import com.firfi.slackbaka.listeners.WelcomeListener
-import com.firfi.slackbaka.workers.{HistoryLoader, PonyLoader, BakaDispatcher}
+import com.firfi.slackbaka.workers.{GelbooruLoader, HistoryLoader, PonyLoader, BakaDispatcher}
 import slack.api.SlackApiClient
 import slack.rtm.SlackRtmClient
 import scala.util.{Try, Success, Failure}
@@ -16,7 +16,7 @@ object SlackBaka {
   case class BakaResponse(message: String, channel: String)
   case class PrivateResponse(message: String, user: String)
 
-  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers
+  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ GelbooruLoader.getWorkers
 
   class BakaResponder(slackRtmClient: SlackRtmClient, slackApiClient: SlackApiClient) extends Actor {
     import scala.concurrent.ExecutionContext.Implicits.global
