@@ -28,7 +28,7 @@ object GelbooruLoader extends BakaLoader {
   }
 }
 
-case class Post(sampleUrl: String)
+case class Post(sampleUrl: String, tags: String)
 
 trait Protocols {
 
@@ -60,7 +60,7 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
   }
 
   implicit val postsUnmarshaller: FromEntityUnmarshaller[Seq[Post]] =
-    defaultNodeSeqUnmarshaller.map(_ \ "post").map(l => l.map(_ \ "@sample_url").map(_.text).map(url => Post(sampleUrl=url)))
+    defaultNodeSeqUnmarshaller.map(_ \ "post").map(l => l.map(p => (p \ "@sample_url", p \ "@tags")).map({case (url, tags) => Post(sampleUrl=url.text, tags=tags.text)}))
 
 
   val pattern = """(?i).*\bбура\b(.*)""".r
@@ -72,11 +72,10 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
           response.status match {
             case OK => {
               Unmarshal(response.entity).to[Seq[Post]].map(seq =>
-                Random.shuffle(seq).headOption.map(post => Right(post.sampleUrl)).getOrElse(Left("no images for you fagget"))
+                Random.shuffle(seq).headOption.map(post => Right(post)).getOrElse(Left("no images for you fagget"))
               ).flatMap {
-                case Right(url) => {
-                  println(s"about to imgutify $url")
-                  imgurify(url).map(s => Right(s))
+                case Right(post) => {
+                  imgurify(post.sampleUrl).map(s => Right(s"$s\n${post.tags}"))
                 }
                 case Left(e) => Future {Right(e)} // return as message for user
               }
