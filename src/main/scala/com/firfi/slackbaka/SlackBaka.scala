@@ -50,7 +50,7 @@ object SlackBaka {
     }
 
     val state = client.state
-    val generalId = state.getChannelIdForName("general")
+    val generalId = state.getChannelIdForName("upwork")
     generalId.map{id => client.addEventListener(system.actorOf(Props(new WelcomeListener(responder))))} // TODO generalise
   }
 }
