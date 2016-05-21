@@ -10,12 +10,12 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success, Try}
 
 object HistoryLoader extends BakaLoader {
-  override def getWorkers:Set[Class[_]] = {
+  override def getWorkers: Set[Class[_]] = {
     Set(classOf[HistoryWorker])
   }
 }
 
-class HistoryWorker(none: Any) extends BakaWorker {
+trait MongoExtension {
   val MONGOLAB_DB = System.getenv("MONGOLAB_DB")
   val driver = new MongoDriver
   val uri = System.getenv("MONGOLAB_URI")
@@ -25,6 +25,10 @@ class HistoryWorker(none: Any) extends BakaWorker {
       driver.connection(parsedUri)
     }
   val db = connection.map((c) => c(MONGOLAB_DB))
+}
+
+class HistoryWorker(none: Any) extends BakaWorker with MongoExtension {
+
   val messages = db.map((db_) => db_[BSONCollection]("messages"))
 
   override def handle(cm: ChatMessage) = {

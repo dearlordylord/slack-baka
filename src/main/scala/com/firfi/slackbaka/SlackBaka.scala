@@ -2,10 +2,11 @@ package com.firfi.slackbaka
 
 import akka.actor.{Actor, Props, ActorSystem}
 import com.firfi.slackbaka.listeners.WelcomeListener
-import com.firfi.slackbaka.workers.{GelbooruLoader, HistoryLoader, PonyLoader, BakaDispatcher}
+import com.firfi.slackbaka.workers.{GelbooruLoader, HistoryLoader, PonyLoader, BakaDispatcher, NomadLoader}
 import slack.api.SlackApiClient
 import slack.rtm.SlackRtmClient
 import scala.util.{Try, Success, Failure}
+import scala.concurrent.duration._
 
 
 
@@ -16,7 +17,7 @@ object SlackBaka {
   case class BakaResponse(message: String, channel: String)
   case class PrivateResponse(message: String, user: String)
 
-  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ GelbooruLoader.getWorkers
+  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ GelbooruLoader.getWorkers ++ NomadLoader.getWorkers
 
   class BakaResponder(slackRtmClient: SlackRtmClient, slackApiClient: SlackApiClient) extends Actor {
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -37,7 +38,7 @@ object SlackBaka {
   def main(args: Array[String]) {
     implicit val system = ActorSystem("Baka")
     val API_TOKEN = System.getenv("SLACK_TOKEN")
-    val client = SlackRtmClient(API_TOKEN)
+    val client = SlackRtmClient(API_TOKEN, 30.seconds) // consistent timeouts on slow connection
     val apiClient = SlackApiClient(API_TOKEN)
 
     val responder = system.actorOf(Props(new BakaResponder(client, apiClient)))

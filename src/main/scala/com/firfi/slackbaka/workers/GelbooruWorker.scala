@@ -30,11 +30,7 @@ object GelbooruLoader extends BakaLoader {
 
 case class Post(sampleUrl: String, tags: String)
 
-trait Protocols {
-
-}
-
-class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder) with Protocols with ScalaXmlSupport with ImgurUtility {
+class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder) with ScalaXmlSupport with ImgurUtility {
 
   implicit val system = ActorSystem("Gelbooru")
   implicit val materializer: Materializer = ActorMaterializer()
@@ -62,6 +58,7 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
   implicit val postsUnmarshaller: FromEntityUnmarshaller[Seq[Post]] =
     defaultNodeSeqUnmarshaller.map(_ \ "post").map(l => l.map(p => (p \ "@sample_url", p \ "@tags")).map({case (url, tags) => Post(sampleUrl=url.text, tags=tags.text)}))
 
+  case class Post(sampleUrl: String, tags: String)
 
   val pattern = """(?i).*\bбура\b(.*)""".r
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
