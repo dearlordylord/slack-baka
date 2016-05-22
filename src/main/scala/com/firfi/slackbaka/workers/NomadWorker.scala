@@ -55,10 +55,11 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       .map(_ \ "geoname").map(l => l.map(p => (p \ "name", p \ "lat", p \ "lng"))
       .map({case (name, lat, lng) => Geoname(name.text, lat.text.toDouble, lng.text.toDouble)}))
   val geonamesUsername = System.getenv("GEONAMES_USERNAME")
+
   val setCityPattern = """baka nomad city set (.+)""".r
   val getCityVillagersPatten = """baka nomad city get (.+)""".r
   val helpPattern = """baka nomad help""".r
-  val cityListPattern = """baka nomad city list"""
+
   def request(query: String): Future[HttpResponse] = {
     val cityFeatureClass = "P"
     import com.netaporter.uri.dsl._
@@ -119,20 +120,19 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         (geoname) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
       )
       case getCityVillagersPatten(cityName) => checkGeonameThen(cityName,
-        (geoname) => getNomadCity(geoname).map(nomads => {
-          nomads match {
-            case n :: ns => {
-              responder ! PrivateResponse((List(s"Nomads in city ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
-              Right(s"Nomads in city ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
-            }
-            case _ => {
-              Right(s"There's no nomads in city ${geoname.name}")
-            }
+        (geoname) => getNomadCity(geoname).map({
+          case nomads@(n :: ns) => {
+            responder ! PrivateResponse((List(s"Nomads in city ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
+            Right(s"Nomads in city ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
           }
+          case _ => Right(s"There's no nomads in city ${geoname.name}")
         }).recoverWith {
           case e: Exception => println(e); Future.successful(Left(e))
         }
       )
+      case helpPattern() => Future.successful(Right(
+        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten).map(_.toString())).mkString("\n")
+      ))
       case _ => Future { Left() }
     }
   }
