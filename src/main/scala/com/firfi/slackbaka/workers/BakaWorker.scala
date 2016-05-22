@@ -19,7 +19,7 @@ import scala.concurrent.Future
 import akka.actor.{ActorSystem, ActorRef, Actor}
 import akka.event.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.Random
+import scala.util.{Failure, Success, Try, Random}
 
 abstract class BakaLoader {
   def getWorkers:Set[Class[_]]
@@ -122,6 +122,19 @@ trait BakaWorker extends Actor with BakaWorkerUtility {
 
 abstract class BakaRespondingWorker(responder: ActorRef) extends Actor with BakaWorkerUtility {
   val log = Logging(context.system, this)
+
+  implicit class ToUserMention(user: String) {
+    // U024BE7LH to <@U024BE7LH> so slack clients make sense out of user and we don't need to pull user names each time
+    def toSlackMention = s"<@$user>"
+  }
+
+  implicit def tryToFuture[T](t: Try[T]): Future[T] = {
+    t match {
+      case Success(c) => Future.successful(c)
+      case Failure(e) => Future.failed(e)
+    }
+  }
+
   def handle(cm: ChatMessage): Future[Either[Unit, String]]
 
   def receive = {

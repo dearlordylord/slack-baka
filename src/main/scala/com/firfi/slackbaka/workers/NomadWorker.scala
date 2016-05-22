@@ -10,20 +10,32 @@ import akka.http.scaladsl.model.headers.Cookie
 import akka.http.scaladsl.unmarshalling._
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.firfi.slackbaka.SlackBaka.ChatMessage
+import com.firfi.slackbaka.SlackBaka.{PrivateResponse, ChatMessage}
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.indexes.{IndexType, Index}
-import reactivemongo.bson.{BSONDateTime, BSONDocument}
+import reactivemongo.bson.{BSONDocumentReader, BSONDateTime, BSONDocument}
+import slack.api.SlackApiClient
 import scala.concurrent.{ExecutionContext, Future}
 import ExecutionContext.Implicits.global
 
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Random}
+import scala.util.{Try, Failure, Success, Random}
 
 object NomadLoader extends BakaLoader {
   override def getWorkers: Set[Class[_]] = {
     Set(classOf[NomadWorker])
+  }
+}
+
+case class MongoGeorecord(user: String, city: String)
+
+object MongoGeorecord {
+  implicit object MongoGeorecordReader extends BSONDocumentReader[MongoGeorecord] {
+    def read(doc: BSONDocument): MongoGeorecord = {
+      def gets(n: String) = doc.getAs[String](n).get
+      MongoGeorecord(gets("user"), gets("city"))
+    }
   }
 }
 
@@ -75,12 +87,8 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   }
   def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Unit] = {
     for {
-      c <- nomadCities match {
-        case Success(c) => Future.successful(c)
-        case Failure(e) => Future.failed(e)
-      }
-    } yield {
-      c.update(
+      c <- tryToFuture(nomadCities)
+      r <- c.update(
         BSONDocument("user" -> cm.user),
         BSONDocument(
           "user" -> cm.user,
@@ -88,17 +96,43 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         ),
         upsert = true
       )
-    }
+    } yield {}
   }
+  def getNomadCity(geoname: Geoname): Future[List[MongoGeorecord]] = {
+    import MongoGeorecord._
+    for {
+      c <- tryToFuture(nomadCities)
+      r <- c.find(BSONDocument("city" -> geoname.name)).cursor[MongoGeorecord]().collect[List]()
+    } yield r
+  }
+  def checkGeonameThen(cityName: String, f: (Geoname) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
+    checkGeoname(cityName).flatMap {
+      case Right(either) => either match {
+        case Left(errorMessageForUser) => Future.successful(Right(errorMessageForUser))
+        case Right(geoname) => f(geoname)
+      }
+      case Left(e) => Future.successful(Left(e))
+    }
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
     cm.message match {
-      case setCityPattern(cityName) => checkGeoname(cityName).flatMap {
-        case Right(either) => either match {
-          case Left(errorMessageForUser) => Future.successful(Right(errorMessageForUser))
-          case Right(geoname) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+      case setCityPattern(cityName) => checkGeonameThen(cityName,
+        (geoname) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+      )
+      case getCityVillagersPatten(cityName) => checkGeonameThen(cityName,
+        (geoname) => getNomadCity(geoname).map(nomads => {
+          nomads match {
+            case n :: ns => {
+              responder ! PrivateResponse((List(s"Nomads in city ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
+              Right(s"Nomads in city ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
+            }
+            case _ => {
+              Right(s"There's no nomads in city ${geoname.name}")
+            }
+          }
+        }).recoverWith {
+          case e: Exception => println(e); Future.successful(Left(e))
         }
-        case Left(e) => Future.successful(Left(e))
-      }
+      )
       case _ => Future { Left() }
     }
   }
