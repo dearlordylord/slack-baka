@@ -25,20 +25,32 @@ object NomadLoader extends BakaLoader {
   }
 }
 
-case class MongoGeorecord(user: String, city: String)
+object NomadWorker {
+  val CITY = "city"
+  val COUNTRY = "country"
+}
+
+import NomadWorker._
+
+case class MongoGeorecord(user: String, city: String, country: String, lat: Double, lng: Double)
 
 object MongoGeorecord {
   implicit object MongoGeorecordReader extends BSONDocumentReader[MongoGeorecord] {
     def read(doc: BSONDocument): MongoGeorecord = {
       def gets(n: String) = doc.getAs[String](n).get
-      MongoGeorecord(gets("user"), gets("city"))
+      def getd(n: String) = doc.getAs[Double](n).get
+      MongoGeorecord(gets("user"), gets(CITY), gets(COUNTRY), getd("lat"), getd("lng"))
     }
   }
 }
 
 case class Geoname(name: String, countryName: String, lat: Double, lng: Double)
 
+
+
 class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) with ScalaXmlSupport with MongoExtension {
+
+
 
   implicit val system = ActorSystem("Nomad")
   implicit val materializer: Materializer = ActorMaterializer()
@@ -73,12 +85,12 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     (for {
       c <- tryToFuture(nomadCities)
       r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
-      geonames <- Future.sequence(r.map(mr => getGeoname(mr.city).map(r => r.right.get.get))) // migration so we assume data is correct (fixing manually otherwise)
+      geonames <- Future.sequence(r.map(mr => getGeoname(CityName(mr.city)).map(r => r.right.get.get))) // migration so we assume data is correct (fixing manually otherwise)
     } yield {
       geonames.distinct.foreach(cityGeoname => {
         println(cityGeoname)
         c.update(
-          BSONDocument("city" -> cityGeoname.name),
+          BSONDocument(CITY -> cityGeoname.name),
           BSONDocument("$set" -> BSONDocument(
             "country" -> cityGeoname.countryName,
             "lat" -> cityGeoname.lat,
@@ -94,17 +106,16 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     }
   }
 
-  def request(query: String): Future[HttpResponse] = {
-    val cityFeatureClass = "P"
+  def request(placeName: PlaceName): Future[HttpResponse] = {
     import com.netaporter.uri.dsl._
     Source.single(RequestBuilding.Get(
-      ("/search?" ? ("q" -> query)
-        & ("featureClass" -> cityFeatureClass)
+      ("/search?" ? ("q" -> placeName.name)
+        & ("featureClass" -> placeName.featureClass)
         & ("maxRows" -> 1)
         & ("username" -> geonamesUsername)).toString
     )).via(connectionFlow).runWith(Sink.head)
   }
-  def getGeoname(city: String): Future[Either[String, Option[Geoname]]] = request(city).flatMap {
+  def getGeoname(place: PlaceName): Future[Either[String, Option[Geoname]]] = request(place).flatMap {
     case HttpResponse(OK, _, entity, _) => Unmarshal(entity).to[Seq[Geoname]].map(seq =>
       Right(seq.headOption)
     )
@@ -113,11 +124,20 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       Left(error)
     }
   }
-  def checkGeoname(city: String): Future[Either[String, Either[String, Geoname]]] = getGeoname(city).map { r =>
+  sealed abstract class PlaceName(val name: String, val typeName: String, val featureClass: String)
+  case class CityName(override val name: String) extends PlaceName(name, CITY, "P")
+  case class CountryName(override val name: String) extends PlaceName(name, COUNTRY, "A")
+  def checkGeoname(place: PlaceName): Future[Either[String, Either[String, Geoname]]] = getGeoname(place).map { r =>
+    def getName(geoname: Geoname, t: PlaceName): String = {
+      place match {
+        case CityName(_) => geoname.name
+        case CountryName(_) => geoname.countryName
+      }
+    }
     r.right.map {
-      case Some(geoname) if geoname.name == city => Right(geoname)
-      case Some(geoname) => Left(s"City name $city isn't in database. You meant ${geoname.name}?")
-      case None => Left(s"No city with name $city found")
+      case Some(geoname) if getName(geoname, place) == place.name => Right(geoname)
+      case Some(geoname) => Left(s"No ${place.typeName} name ${place.name} in database. You meant ${getName(geoname, place)}?")
+      case None => Left(s"No ${place.typeName} with name ${place.name} found")
     }
   }
   def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Unit] = {
@@ -127,8 +147,8 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         BSONDocument("user" -> cm.user),
         BSONDocument(
           "user" -> cm.user,
-          "city" -> geoname.name,
-          "country" -> geoname.countryName,
+          CITY -> geoname.name,
+          COUNTRY -> geoname.countryName,
           "lat" -> geoname.lat,
           "lng" -> geoname.lng
         ),
@@ -137,39 +157,42 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     } yield {}
   }
 
-  def getNomadCity(geoname: Geoname): Future[List[MongoGeorecord]] = {
+  def getNomadPlace(geoname: Geoname, placeName: PlaceName): Future[List[MongoGeorecord]] = {
     import MongoGeorecord._
     for {
       c <- tryToFuture(nomadCities)
-      r <- c.find(BSONDocument("city" -> geoname.name)).cursor[MongoGeorecord]().collect[List]()
+      r <- c.find(BSONDocument(placeName.typeName -> geoname.name)).cursor[MongoGeorecord]().collect[List]()
     } yield r
   }
-  def checkGeonameThen(cityName: String, f: (Geoname) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
-    checkGeoname(cityName).flatMap {
+  def checkGeonameThen(placeName: PlaceName, f: (Geoname, PlaceName) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
+    checkGeoname(placeName).flatMap {
       case Right(either) => either match {
         case Left(errorMessageForUser) => Future.successful(Right(errorMessageForUser))
-        case Right(geoname) => f(geoname)
+        case Right(geoname) => f(geoname, placeName)
       }
       case Left(e) => Future.successful(Left(e))
     }
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
-    cm.message match {
-      case setCityPattern(cityName) => checkGeonameThen(cityName,
-        (geoname) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
-      )
-      case getCityVillagersPatten(cityName) => checkGeonameThen(cityName,
-        (geoname) => getNomadCity(geoname).map({
-          case nomads@(n :: ns) => {
-            responder ! PrivateResponse((List(s"Nomads in city ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
-            Right(s"Nomads in city ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
-          }
-          case _ => Right(s"There's no nomads in city ${geoname.name}")
-        }).recoverWith {
-          case e: Exception => println(e); Future.successful(Left(e))
+    def nomadsResponse(geoname: Geoname, placeName: PlaceName): Future[Either[Unit, String]] = {
+      getNomadPlace(geoname, placeName).map({
+        case nomads@(n :: ns) => {
+          responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
+          Right(s"Nomads in ${placeName.typeName} ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
         }
+        case _ => Right(s"There's no nomads in ${placeName.typeName} ${geoname.name}")
+      }).recoverWith {
+        case e: Exception => println(e); Future.successful(Left(e))
+      }
+    }
+    cm.message match {
+      case setCityPattern(cityName) => checkGeonameThen(CityName(cityName),
+        (geoname, _) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
       )
+      case getCityVillagersPatten(cityName) => checkGeonameThen(CityName(cityName), nomadsResponse)
+      case setCountryPattern(_) => Future.successful(Right("No country for old man. Use city command."))
+      case getCountryPattern(countryName) => checkGeonameThen(CountryName(countryName), nomadsResponse)
       case helpPattern() => Future.successful(Right(
-        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten).map(_.toString())).mkString("\n")
+        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten, getCountryPattern).map(_.toString())).mkString("\n")
       ))
      // case "migration" => migration().map(_ => Left())
       case _ => Future { Left() }
