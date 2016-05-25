@@ -6,15 +6,12 @@ import akka.http.scaladsl.client.RequestBuilding
 import akka.http.scaladsl.marshallers.xml.ScalaXmlSupport
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.http.scaladsl.model.headers.Cookie
 import akka.http.scaladsl.unmarshalling._
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import com.firfi.slackbaka.SlackBaka.{PrivateResponse, ChatMessage}
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.api.indexes.{IndexType, Index}
 import reactivemongo.bson.{BSONDocumentReader, BSONDateTime, BSONDocument}
-import slack.api.SlackApiClient
 import scala.concurrent.{ExecutionContext, Future}
 import ExecutionContext.Implicits.global
 
@@ -68,6 +65,35 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   val listCountryPattern = """baka nomad country list""".r
   val helpPattern = """baka nomad help""".r
 
+  def migration() = { // data migration example. could be useful
+    println("MIGRATION!!!")
+    implicit val ord = new Ordering[Geoname] {
+      def compare(i: Geoname, j: Geoname) = scala.math.Ordering.String.compare(i.name, j.name)
+    }
+    (for {
+      c <- tryToFuture(nomadCities)
+      r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
+      geonames <- Future.sequence(r.map(mr => getGeoname(mr.city).map(r => r.right.get.get))) // migration so we assume data is correct (fixing manually otherwise)
+    } yield {
+      geonames.distinct.foreach(cityGeoname => {
+        println(cityGeoname)
+        c.update(
+          BSONDocument("city" -> cityGeoname.name),
+          BSONDocument("$set" -> BSONDocument(
+            "country" -> cityGeoname.countryName,
+            "lat" -> cityGeoname.lat,
+            "lng" -> cityGeoname.lng
+          )),
+          multi = true
+        ).recoverWith {
+          case e: Exception => println(e); Future.successful()
+        }
+      })
+    }) recoverWith {
+      case e: Exception => println(e); Future.successful()
+    }
+  }
+
   def request(query: String): Future[HttpResponse] = {
     val cityFeatureClass = "P"
     import com.netaporter.uri.dsl._
@@ -110,6 +136,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       )
     } yield {}
   }
+
   def getNomadCity(geoname: Geoname): Future[List[MongoGeorecord]] = {
     import MongoGeorecord._
     for {
@@ -144,6 +171,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       case helpPattern() => Future.successful(Right(
         ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten).map(_.toString())).mkString("\n")
       ))
+     // case "migration" => migration().map(_ => Left())
       case _ => Future { Left() }
     }
   }
