@@ -39,7 +39,7 @@ object MongoGeorecord {
   }
 }
 
-case class Geoname(name: String, lat: Double, long: Double)
+case class Geoname(name: String, countryName: String, lat: Double, lng: Double)
 
 class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) with ScalaXmlSupport with MongoExtension {
 
@@ -52,12 +52,20 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     Http().outgoingConnection("api.geonames.org")
   implicit val geonamesUnmarshaller: FromEntityUnmarshaller[Seq[Geoname]] =
     defaultNodeSeqUnmarshaller
-      .map(_ \ "geoname").map(l => l.map(p => (p \ "name", p \ "lat", p \ "lng"))
-      .map({case (name, lat, lng) => Geoname(name.text, lat.text.toDouble, lng.text.toDouble)}))
+      .map(_ \ "geoname").map(l => l.map(p => (p \ "name", p \ "countryName", p \ "lat", p \ "lng"))
+      .map({
+        case (name, countryName, lat, lng) =>
+          Geoname(name.text, countryName.text, lat.text.toDouble, lng.text.toDouble)
+        })
+      )
   val geonamesUsername = System.getenv("GEONAMES_USERNAME")
 
   val setCityPattern = """baka nomad city set (.+)""".r
   val getCityVillagersPatten = """baka nomad city get (.+)""".r
+  val listCityPattern = """baka nomad city list""".r
+  val setCountryPattern = """baka nomad country set (.+)""".r // and we decline it
+  val getCountryPattern = """baka nomad country get (.+)""".r
+  val listCountryPattern = """baka nomad country list""".r
   val helpPattern = """baka nomad help""".r
 
   def request(query: String): Future[HttpResponse] = {
@@ -93,7 +101,10 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         BSONDocument("user" -> cm.user),
         BSONDocument(
           "user" -> cm.user,
-          "city" -> geoname.name
+          "city" -> geoname.name,
+          "country" -> geoname.countryName,
+          "lat" -> geoname.lat,
+          "lng" -> geoname.lng
         ),
         upsert = true
       )
