@@ -176,7 +176,10 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     def nomadsResponse(geoname: Geoname, placeName: PlaceName): Future[Either[Unit, String]] = {
       getNomadPlace(geoname, placeName).map({
         case nomads@(n :: ns) => {
-          responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") :: nomads.map(_.user.toSlackMention)).mkString("\n"), cm.user)
+          responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") ::: nomads.sortBy(_.city).map(n => placeName match {
+            case CityName(_) => n.user.toSlackMention
+            case CountryName(_) => s"${n.user.toSlackMention}: ${n.city}"
+          })).mkString("\n"), cm.user)
           Right(s"Nomads in ${placeName.typeName} ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
         }
         case _ => Right(s"There's no nomads in ${placeName.typeName} ${geoname.name}")
