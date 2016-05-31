@@ -164,7 +164,16 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       r <- c.find(BSONDocument(placeName.typeName -> geoname.name)).cursor[MongoGeorecord]().collect[List]()
     } yield r
   }
-  def checkGeonameThen(placeName: PlaceName, f: (Geoname, PlaceName) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
+
+  def getAllNomads: Future[List[MongoGeorecord]] = {
+    import MongoGeorecord._
+    for {
+      c <- tryToFuture(nomadCities)
+      r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
+    } yield r
+  }
+
+  def checkGeonameThen[T <: PlaceName](placeName: T, f: (Geoname, T) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
     checkGeoname(placeName).flatMap {
       case Right(either) => either match {
         case Left(errorMessageForUser) => Future.successful(Right(errorMessageForUser))
@@ -187,15 +196,28 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         case e: Exception => println(e); Future.successful(Left(e))
       }
     }
+    def countriesResponse(): Future[Either[Unit, String]] = {
+      getAllNomads.map(nomads =>
+        Right(
+          (
+            List("Nomads per country: ") :::
+            nomads.groupBy(n => n.country).toList.sortBy(_._1).map(p => s"${p._1}: ${p._2.length}")
+          ).mkString("\n")
+        )
+      ).recoverWith {
+        case e: Exception => println(e); Future.successful(Left(e))
+      }
+    }
     cm.message match {
-      case setCityPattern(cityName) => checkGeonameThen(CityName(cityName),
-        (geoname, _) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+      case setCityPattern(cityName) => checkGeonameThen(CityName(cityName.trim),
+        (geoname, _: CityName) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
       )
-      case getCityVillagersPatten(cityName) => checkGeonameThen(CityName(cityName), nomadsResponse)
+      case getCityVillagersPatten(cityName) => checkGeonameThen(CityName(cityName.trim), nomadsResponse)
       case setCountryPattern(_) => Future.successful(Right("No country for old man. Use city command."))
-      case getCountryPattern(countryName) => checkGeonameThen(CountryName(countryName), nomadsResponse)
+      case getCountryPattern(countryName) => checkGeonameThen(CountryName(countryName.trim), nomadsResponse)
+      case listCountryPattern() => countriesResponse()
       case helpPattern() => Future.successful(Right(
-        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten, getCountryPattern).map(_.toString())).mkString("\n")
+        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten, getCountryPattern, listCountryPattern).map(_.toString())).mkString("\n")
       ))
      // case "migration" => migration().map(_ => Left())
       case _ => Future { Left() }
