@@ -72,6 +72,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   val commandPrefix = "^?[Bb]aka nomad"
 
   val setCityPattern = s"$commandPrefix city set (.+)".r
+  val unsetCityPattern = s"$commandPrefix city unset".r
   val getCityVillagersPatten = s"$commandPrefix city get (.+)".r
   val listCityPattern = s"$commandPrefix city list".r
   val setCountryPattern = s"$commandPrefix country set (.+)".r // and we decline it
@@ -129,7 +130,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   sealed abstract class PlaceName(val name: String, val typeName: String, val featureClass: String)
   case class CityName(override val name: String) extends PlaceName(name, CITY, "P")
   case class CountryName(override val name: String) extends PlaceName(name, COUNTRY, "A")
-  def checkGeoname(place: PlaceName): Future[Either[String, Either[String, Geoname]]] = getGeoname(place).map { r =>
+  def checkGeoname(place: PlaceName): Future[Either[String, Either[(String, Option[Geoname]), Geoname]]] = getGeoname(place).map { r =>
     def getName(geoname: Geoname, t: PlaceName): String = {
       place match {
         case CityName(_) => geoname.name
@@ -138,8 +139,8 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     }
     r.right.map {
       case Some(geoname) if getName(geoname, place) == place.name => Right(geoname)
-      case Some(geoname) => Left(s"No ${place.typeName} name ${place.name} in database. You meant ${getName(geoname, place)}?")
-      case None => Left(s"No ${place.typeName} with name ${place.name} found")
+      case Some(geoname) => Left(s"No ${place.typeName} name ${place.name} in database. You meant ${getName(geoname, place)}?"->Some(geoname))
+      case None => Left(s"No ${place.typeName} with name ${place.name} found"->None)
     }
   }
   def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Unit] = {
@@ -159,6 +160,13 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     } yield {}
   }
 
+  def unsetNomadCity(cm: ChatMessage): Future[Unit] = {
+    for {
+      c <- tryToFuture(nomadCities)
+      r <- c.remove(BSONDocument("user" -> cm.user))
+    } yield {}
+  }
+
   def getNomadPlace(geoname: Geoname, placeName: PlaceName): Future[List[MongoGeorecord]] = {
     import MongoGeorecord._
     for {
@@ -175,16 +183,19 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     } yield r
   }
 
-  def checkGeonameThen[T <: PlaceName](placeName: T, f: (Geoname, T) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
+  def checkGeonameThen[T <: PlaceName](placeName: T, f: (Geoname, T, Option[String]) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
     checkGeoname(placeName).flatMap {
       case Right(either) => either match {
-        case Left(errorMessageForUser) => Future.successful(Right(errorMessageForUser))
-        case Right(geoname) => f(geoname, placeName)
+        case Left((errorMessageForUser, geoname)) => geoname match {
+          case Some(geoname) => f(geoname, placeName, Some(errorMessageForUser))
+          case None => Future.successful(Left(errorMessageForUser))
+        }
+        case Right(geoname) => f(geoname, placeName, None)
       }
       case Left(e) => Future.successful(Left(e))
     }
   override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
-    def nomadsResponse(geoname: Geoname, placeName: PlaceName): Future[Either[Unit, String]] = {
+    def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[Unit, String]] = {
       getNomadPlace(geoname, placeName).map({
         case nomads@(n :: ns) => {
           responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") ::: nomads.sortBy(_.city).map(n => placeName match {
@@ -194,6 +205,9 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
           Right(s"Nomads in ${placeName.typeName} ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
         }
         case _ => Right(s"There's no nomads in ${placeName.typeName} ${geoname.name}")
+      }).map({
+        case Right(msg) if warning.nonEmpty => Right(List(warning.get, msg).mkString("\n\n"))
+        case other@_ => other
       }).recoverWith {
         case e: Exception => println(e); Future.successful(Left(e))
       }
@@ -212,14 +226,18 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     }
     cm.message match {
       case setCityPattern(cityName) => checkGeonameThen(CityName(cityName.trim),
-        (geoname, _: CityName) => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+        (geoname, _: CityName, error) => error match {
+          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+          case Some(msg) => Future.successful(Right(msg))
+        }
       )
+      case unsetCityPattern() => unsetNomadCity(cm).map(_ => Right(s"Bye mr. nomad"))
       case getCityVillagersPatten(cityName) => checkGeonameThen(CityName(cityName.trim), nomadsResponse)
       case setCountryPattern(_) => Future.successful(Right("No country for old man. Use city command."))
       case getCountryPattern(countryName) => checkGeonameThen(CountryName(countryName.trim), nomadsResponse)
       case listCountryPattern() => countriesResponse()
       case helpPattern() => Future.successful(Right(
-        ("Commands: " :: List(helpPattern, setCityPattern, getCityVillagersPatten, getCountryPattern, listCountryPattern).map(_.toString())).mkString("\n")
+        ("Commands: " :: List(helpPattern, setCityPattern, unsetCityPattern, getCityVillagersPatten, getCountryPattern, listCountryPattern).map(_.toString())).mkString("\n")
       ))
      // case "migration" => migration().map(_ => Left())
       case _ => Future { Left() }
