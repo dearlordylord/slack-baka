@@ -69,13 +69,15 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       )
   val geonamesUsername = System.getenv("GEONAMES_USERNAME")
 
-  val setCityPattern = """baka nomad city set (.+)""".r
-  val getCityVillagersPatten = """baka nomad city get (.+)""".r
-  val listCityPattern = """baka nomad city list""".r
-  val setCountryPattern = """baka nomad country set (.+)""".r // and we decline it
-  val getCountryPattern = """baka nomad country get (.+)""".r
-  val listCountryPattern = """baka nomad country list""".r
-  val helpPattern = """baka nomad help""".r
+  val commandPrefix = "^?[Bb]aka nomad"
+
+  val setCityPattern = s"$commandPrefix city set (.+)".r
+  val getCityVillagersPatten = s"$commandPrefix city get (.+)".r
+  val listCityPattern = s"$commandPrefix city list".r
+  val setCountryPattern = s"$commandPrefix country set (.+)".r // and we decline it
+  val getCountryPattern = s"$commandPrefix country get (.+)".r
+  val listCountryPattern = s"$commandPrefix country list".r
+  val helpPattern = s"$commandPrefix help".r
 
   def migration() = { // data migration example. could be useful
     println("MIGRATION!!!")
