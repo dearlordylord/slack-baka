@@ -119,9 +119,9 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     )).via(connectionFlow).runWith(Sink.head)
   }
   def getGeoname(place: PlaceName): Future[Either[String, Option[Geoname]]] = request(place).flatMap {
-    case HttpResponse(OK, _, entity, _) => Unmarshal(entity).to[Seq[Geoname]].map(seq =>
+    case HttpResponse(OK, _, entity, _) => Unmarshal(entity).to[Seq[Geoname]].map(seq => {
       Right(seq.headOption)
-    )
+    })
     case HttpResponse(status, _, entity, _) => Unmarshal(entity).to[String].map { entity =>
       val error = s"Geonames request failed with status code $status and entity $entity"
       Left(error)

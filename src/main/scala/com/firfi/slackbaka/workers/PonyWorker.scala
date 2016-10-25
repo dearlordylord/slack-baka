@@ -17,7 +17,7 @@ object PonyLoader extends BakaLoader {
 
 class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
-  val API_ROOT = "https://derpiboo.ru/"
+  val API_ROOT = "https://derpibooru.org/"
 
   // comma-separated channek _IDS_
   val ponyAllowedChannels: Set[String] = commaEnvToSet("PONY_ALLOWED_CHANNELS")
