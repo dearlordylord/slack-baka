@@ -135,12 +135,12 @@ abstract class BakaRespondingWorker(responder: ActorRef) extends Actor with Baka
     }
   }
 
-  def handle(cm: ChatMessage): Future[Either[Unit, String]]
+  def handle(cm: ChatMessage): Future[Either[String, String]]
 
   def receive = {
     case cm@ChatMessage(text, channel, user, ts) =>
       handle(cm).map {
-        case Left(_) => log.info("left")
+        case Left(e) => if (e != "") log.info(e)
         case Right(response) =>
           responder ! BakaResponse(response, channel)
       }

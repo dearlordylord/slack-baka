@@ -61,7 +61,7 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
   case class Post(sampleUrl: String, tags: String)
 
   val pattern = """(?i).*\bбура\b(.*)""".r
-  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
+  override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     cm.message match {
       case pattern(tags) if allowedChannels.contains(cm.channel) =>
         val extraTags = commaSeparatedToSet(tags).map(encodeURIComponent)
@@ -85,11 +85,11 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
         }).map {
           case Left(error) => {
             println(error)
-            Left()
+            Left(error)
           }
           case Right(r) => Right(r)
         }
-      case _ => Future { Left() }
+      case _ => Future { Left("") }
     }
   }
 }

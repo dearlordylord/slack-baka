@@ -1,6 +1,6 @@
 package com.firfi.slackbaka.workers
 
-import akka.actor.{ActorSystem, ActorRef}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.client.RequestBuilding
 import akka.http.scaladsl.marshallers.xml.ScalaXmlSupport
@@ -9,15 +9,15 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.unmarshalling._
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.firfi.slackbaka.SlackBaka.{PrivateResponse, ChatMessage}
+import com.firfi.slackbaka.SlackBaka.{ChatMessage, PrivateResponse}
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.bson.{BSONDocumentReader, BSONDateTime, BSONDocument}
+import reactivemongo.api.commands.UpdateWriteResult
+import reactivemongo.bson.{BSONDateTime, BSONDocument, BSONDocumentReader}
+
 import scala.concurrent.{ExecutionContext, Future}
 import ExecutionContext.Implicits.global
-
-
 import scala.concurrent.Future
-import scala.util.{Try, Failure, Success, Random}
+import scala.util.{Failure, Random, Success, Try}
 
 object NomadLoader extends BakaLoader {
   override def getWorkers: Set[Class[_]] = {
@@ -143,7 +143,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       case None => Left(s"No ${place.typeName} with name ${place.name} found"->None)
     }
   }
-  def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Unit] = {
+  def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Either[String, Unit]] = {
     for {
       c <- tryToFuture(nomadCities)
       r <- c.update(
@@ -157,7 +157,13 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         ),
         upsert = true
       )
-    } yield {}
+    } yield r match {
+      case UpdateWriteResult(false, _, _, _, _, _, _, Some(errorMessage)) => {
+        println(errorMessage)
+        Left(errorMessage)
+      }
+      case _ => Right()
+    }
   }
 
   def unsetNomadCity(cm: ChatMessage): Future[Unit] = {
@@ -183,7 +189,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     } yield r
   }
 
-  def checkGeonameThen[T <: PlaceName](placeName: T, f: (Geoname, T, Option[String]) => Future[Either[Unit, String]]): Future[Either[Unit, String]] =
+  def checkGeonameThen[T <: PlaceName](placeName: T, f: (Geoname, T, Option[String]) => Future[Either[String, String]]): Future[Either[String, String]] =
     checkGeoname(placeName).flatMap {
       case Right(either) => either match {
         case Left((errorMessageForUser, geoname)) => geoname match {
@@ -194,8 +200,8 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       }
       case Left(e) => Future.successful(Left(e))
     }
-  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
-    def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[Unit, String]] = {
+  override def handle(cm: ChatMessage): Future[Either[String, String]] = {
+    def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[String, String]] = {
       getNomadPlace(geoname, placeName).map({
         case nomads@(n :: ns) => {
           responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") ::: nomads.sortBy(_.city).map(n => placeName match {
@@ -209,10 +215,10 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         case Right(msg) if warning.nonEmpty => Right(List(warning.get, msg).mkString("\n\n"))
         case other@_ => other
       }).recoverWith {
-        case e: Exception => println(e); Future.successful(Left(e))
+        case e: Exception => println(e); Future.successful(Left(e.getMessage))
       }
     }
-    def countriesResponse(): Future[Either[Unit, String]] = {
+    def countriesResponse(): Future[Either[String, String]] = {
       getAllNomads.map(nomads =>
         Right(
           (
@@ -221,13 +227,15 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
           ).mkString("\n")
         )
       ).recoverWith {
-        case e: Exception => println(e); Future.successful(Left(e))
+        case e: Exception => println(e); Future.successful(Left(e.getMessage))
       }
     }
     cm.message match {
       case setCityPattern(cityName) => checkGeonameThen(CityName(cityName.trim),
         (geoname, _: CityName, error) => error match {
-          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set."))
+          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set.")).recoverWith {
+            case e: Exception => println(e); Future.successful(Left(e.getMessage))
+          }
           case Some(msg) => Future.successful(Right(msg))
         }
       )
@@ -240,7 +248,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
         ("Commands: " :: List(helpPattern, setCityPattern, unsetCityPattern, getCityVillagersPatten, getCountryPattern, listCountryPattern).map(_.toString())).mkString("\n")
       ))
      // case "migration" => migration().map(_ => Left())
-      case _ => Future { Left() }
+      case _ => Future { Left("") }
     }
   }
 }

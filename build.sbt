@@ -26,8 +26,8 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-actor" % "2.3.9",
     "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
     "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4",
-    "org.reactivemongo" %% "reactivemongo" % "0.11.7",
-    "com.github.gilbertw1" %% "slack-scala-client" % "0.1.4", // .3
+    "org.reactivemongo" %% "reactivemongo" % "0.12.6",
+    "com.github.gilbertw1" %% "slack-scala-client" % "0.2.1", // .3
 //    "io.netty" % "netty" % "3.6.3.Final" force(),
     "com.netaporter" %% "scala-uri" % "0.4.14"
   ) ++ akkadeps

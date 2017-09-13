@@ -47,7 +47,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
   }
 
   val pattern = """(?i).*\bпони\b(.*)""".r
-  override def handle(cm: ChatMessage): Future[Either[Unit, String]] = {
+  override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     import scala.util.parsing.json._
     cm.message match {
       case pattern(tagsFollowingPony) if ponyAllowedChannels.contains(cm.channel) =>
@@ -62,7 +62,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
           "https:" + JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("image").toString
         })
         .map(Right.apply)
-      case _ => Future { Left() }
+      case _ => Future { Left("") }
     }
   }
 }
