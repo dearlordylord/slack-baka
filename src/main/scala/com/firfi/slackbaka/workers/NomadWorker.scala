@@ -112,7 +112,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   def request(placeName: PlaceName): Future[HttpResponse] = {
     import com.netaporter.uri.dsl._
     Source.single(RequestBuilding.Get(
-      ("/search?" ? ("q" -> placeName.name)
+      ("/search?" ? ("q" -> placeName.name.capitalize)
         & ("featureClass" -> placeName.featureClass)
         & ("maxRows" -> 1)
         & ("username" -> geonamesUsername)).toString
@@ -247,7 +247,6 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       case helpPattern() => Future.successful(Right(
         ("Commands: " :: List(helpPattern, setCityPattern, unsetCityPattern, getCityVillagersPatten, getCountryPattern, listCountryPattern).map(_.toString())).mkString("\n")
       ))
-     // case "migration" => migration().map(_ => Left())
       case _ => Future { Left("") }
     }
   }
