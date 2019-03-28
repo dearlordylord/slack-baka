@@ -22,6 +22,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
   // comma-separated channek _IDS_
   val ponyAllowedChannels: Set[String] = commaEnvToSet("PONY_ALLOWED_CHANNELS")
   val extraEnvTags: Set[String] = commaEnvToSet("PONY_EXTRA_TAGS")
+  val apiKey: Option[String] = Option(System.getenv("PONY_API_KEY"))
 
   def request(api: String, query: String = ""): Future[String] = {
     val path = api + ".json?" + query
@@ -32,7 +33,9 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
   def searchQuery(tags: Seq[String], params: Map[String, String] = Map.empty): String = {
     val COMMA = "%2C"
     val tagsString = tags.map((t) => {t.replace(' ', '+')}).mkString(COMMA)
-    (params ++ Map[String, String](("q", tagsString))).map({case (k, v) => k + "=" + v}).mkString("&")
+    (params ++
+      Map[String, String](("q", tagsString)) ++
+      apiKey.map(k => Map[String, String]("key", k)).getOrElse(Map.empty)).map({case (k, v) => k + "=" + v}).mkString("&")
   }
 
   private def randomQuery(extraRequestTags: Set[String]): String = {
