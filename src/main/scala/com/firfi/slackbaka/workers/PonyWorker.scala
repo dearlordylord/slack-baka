@@ -35,7 +35,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
     val tagsString = tags.map((t) => {t.replace(' ', '+')}).mkString(COMMA)
     (params ++
       Map[String, String](("q", tagsString)) ++
-      apiKey.map(k => Map[String, String]("key", k)).getOrElse(Map.empty)).map({case (k, v) => k + "=" + v}).mkString("&")
+      apiKey.map(k => Map[String, String](("key", k))).getOrElse(Map.empty)).map({case (k, v) => k + "=" + v}).mkString("&")
   }
 
   private def randomQuery(extraRequestTags: Set[String]): String = {
