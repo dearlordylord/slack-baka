@@ -10,14 +10,15 @@ import akka.http.scaladsl.unmarshalling._
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import com.firfi.slackbaka.SlackBaka.{ChatMessage, PrivateResponse}
-import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.api.commands.UpdateWriteResult
-import reactivemongo.bson.{BSONDateTime, BSONDocument, BSONDocumentReader}
+import reactivemongo.api.bson.collection.BSONCollection
+import reactivemongo.api.bson.{BSONDateTime, BSONDocument, BSONDocumentReader}
 
 import scala.concurrent.{ExecutionContext, Future}
 import ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.util.matching.Regex
 import scala.util.{Failure, Random, Success, Try}
+import scala.xml.Node
 
 object NomadLoader extends BakaLoader {
   override def getWorkers: Set[Class[_]] = {
@@ -36,49 +37,51 @@ case class MongoGeorecord(user: String, city: String, country: String, lat: Doub
 
 object MongoGeorecord {
   implicit object MongoGeorecordReader extends BSONDocumentReader[MongoGeorecord] {
-    def read(doc: BSONDocument): MongoGeorecord = {
-      def gets(n: String) = doc.getAs[String](n).get
-      def getd(n: String) = doc.getAs[Double](n).get
-      MongoGeorecord(gets("user"), gets(CITY), gets(COUNTRY), getd("lat"), getd("lng"))
+    override def readDocument(doc: BSONDocument): Try[MongoGeorecord] = {
+      def gets(n: String) = doc.getAsTry[String](n)
+      def getd(n: String) = doc.getAsTry[Double](n)
+      (gets("user"), gets(CITY), gets(COUNTRY), getd("lat"), getd("lng")) match {
+        case (Success(user), Success(city), Success(country), Success(lat), Success(lng)) =>
+          Success(MongoGeorecord(user, city, country, lat, lng));
+        case all => Failure(all.productIterator.toList.map(t => t.asInstanceOf[Try[Any]])
+          .filter(t => t.isFailure).head.asInstanceOf[Throwable]);
+      }
+
     }
   }
 }
 
 case class Geoname(name: String, countryName: String, lat: Double, lng: Double)
 
-
-
 class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) with ScalaXmlSupport with MongoExtension {
-
-
 
   implicit val system = ActorSystem("Nomad")
   implicit val materializer: Materializer = ActorMaterializer()
 
-  val nomadCities = db.map((db_) => db_[BSONCollection]("nomadCities"))
+  val getNomadCitiesCollection = () => getDb().map(db_ => db_[BSONCollection]("nomadCities"))
 
   lazy val connectionFlow: Flow[HttpRequest, HttpResponse, Any] =
     Http().outgoingConnection("api.geonames.org")
   implicit val geonamesUnmarshaller: FromEntityUnmarshaller[Seq[Geoname]] =
     defaultNodeSeqUnmarshaller
-      .map(_ \ "geoname").map(l => l.map(p => (p \ "name", p \ "countryName", p \ "lat", p \ "lng"))
+      .map(_ \ "geoname").map(l => l.map((p: Node) => (p \ "name", p \ "countryName", p \ "lat", p \ "lng"))
       .map({
         case (name, countryName, lat, lng) =>
           Geoname(name.text, countryName.text, lat.text.toDouble, lng.text.toDouble)
         })
       )
-  val geonamesUsername = System.getenv("GEONAMES_USERNAME")
+  val geonamesUsername: String = System.getenv("GEONAMES_USERNAME")
 
   val commandPrefix = "^?[Bb]aka nomad"
 
-  val setCityPattern = s"$commandPrefix city set (.+)".r
-  val unsetCityPattern = s"$commandPrefix city unset".r
-  val getCityVillagersPatten = s"$commandPrefix city get (.+)".r
-  val listCityPattern = s"$commandPrefix city list".r
-  val setCountryPattern = s"$commandPrefix country set (.+)".r // and we decline it
-  val getCountryPattern = s"$commandPrefix country get (.+)".r
-  val listCountryPattern = s"$commandPrefix country list".r
-  val helpPattern = s"$commandPrefix help".r
+  val setCityPattern: Regex = s"$commandPrefix city set (.+)".r
+  val unsetCityPattern: Regex = s"$commandPrefix city unset".r
+  val getCityVillagersPatten: Regex = s"$commandPrefix city get (.+)".r
+  val listCityPattern: Regex = s"$commandPrefix city list".r
+  val setCountryPattern: Regex = s"$commandPrefix country set (.+)".r // and we decline it
+  val getCountryPattern: Regex = s"$commandPrefix country get (.+)".r
+  val listCountryPattern: Regex = s"$commandPrefix country list".r
+  val helpPattern: Regex = s"$commandPrefix help".r
 
   def migration() = { // data migration example. could be useful
     println("MIGRATION!!!")
@@ -86,13 +89,13 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       def compare(i: Geoname, j: Geoname) = scala.math.Ordering.String.compare(i.name, j.name)
     }
     (for {
-      c <- tryToFuture(nomadCities)
+      c <- getNomadCitiesCollection()
       r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
       geonames <- Future.sequence(r.map(mr => getGeoname(CityName(mr.city)).map(r => r.right.get.get))) // migration so we assume data is correct (fixing manually otherwise)
     } yield {
       geonames.distinct.foreach(cityGeoname => {
         println(cityGeoname)
-        c.update(
+        c.update.one(
           BSONDocument(CITY -> cityGeoname.name),
           BSONDocument("$set" -> BSONDocument(
             "country" -> cityGeoname.countryName,
@@ -100,7 +103,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
             "lng" -> cityGeoname.lng
           )),
           multi = true
-        ).recoverWith {
+        ) recoverWith {
           case e: Exception => println(e); Future.successful()
         }
       })
@@ -110,7 +113,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   }
 
   def request(placeName: PlaceName): Future[HttpResponse] = {
-    import com.netaporter.uri.dsl._
+    import io.lemonlabs.uri.typesafe.dsl._
     Source.single(RequestBuilding.Get(
       ("/search?" ? ("q" -> placeName.name)
         & ("featureClass" -> placeName.featureClass)
@@ -144,10 +147,8 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     }
   }
   def setNomadCity(cm: ChatMessage, geoname: Geoname): Future[Either[String, Unit]] = {
-    for {
-      c <- tryToFuture(nomadCities)
-      r <- c.update(
-        BSONDocument("user" -> cm.user),
+    getNomadCitiesCollection().flatMap(c =>
+      c.update.one(BSONDocument("user" -> cm.user),
         BSONDocument(
           "user" -> cm.user,
           CITY -> geoname.name,
@@ -156,27 +157,31 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
           "lng" -> geoname.lng
         ),
         upsert = true
-      )
-    } yield r match {
-      case UpdateWriteResult(false, _, _, _, _, _, _, Some(errorMessage)) => {
-        println(errorMessage)
-        Left(errorMessage)
-      }
-      case _ => Right()
-    }
+      ).map(_ => Right()).recover({
+        case e =>
+          println("Error setting nomad city")
+          println(e)
+          throw e
+      })
+    ).recover({
+      case e =>
+        println("Error getting nomad cities db")
+        println(e)
+        throw e
+    })
   }
 
   def unsetNomadCity(cm: ChatMessage): Future[Unit] = {
     for {
-      c <- tryToFuture(nomadCities)
-      r <- c.remove(BSONDocument("user" -> cm.user))
+      c <- getNomadCitiesCollection()
+      r <- c.delete.one(BSONDocument("user" -> cm.user))
     } yield {}
   }
 
   def getNomadPlace(geoname: Geoname, placeName: PlaceName): Future[List[MongoGeorecord]] = {
     import MongoGeorecord._
     for {
-      c <- tryToFuture(nomadCities)
+      c <- getNomadCitiesCollection()
       r <- c.find(BSONDocument(placeName.typeName -> geoname.name)).cursor[MongoGeorecord]().collect[List]()
     } yield r
   }
@@ -184,7 +189,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   def getAllNomads: Future[List[MongoGeorecord]] = {
     import MongoGeorecord._
     for {
-      c <- tryToFuture(nomadCities)
+      c <- getNomadCitiesCollection()
       r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
     } yield r
   }

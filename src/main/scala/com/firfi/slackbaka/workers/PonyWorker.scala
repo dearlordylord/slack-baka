@@ -27,7 +27,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
   def request(api: String, query: String = ""): Future[String] = {
     val path = api + ".json?" + query
     val svc = url(API_ROOT + path)
-    Http(svc OK as.String)
+    Http.default(svc OK as.String)
   }
 
   def searchQuery(tags: Seq[String], params: Map[String, String] = Map.empty): String = {

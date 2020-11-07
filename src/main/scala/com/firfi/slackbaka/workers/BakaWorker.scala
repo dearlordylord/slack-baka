@@ -1,17 +1,14 @@
 package com.firfi.slackbaka.workers
 
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.client.RequestBuilding
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.marshalling.Marshal
-import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.headers.{`Content-Type`, GenericHttpCredentials, Authorization}
+import akka.http.scaladsl.model.headers.{GenericHttpCredentials, Authorization}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.{PredefinedFromEntityUnmarshallers, Unmarshal}
 import akka.stream.{ActorMaterializer, Materializer}
-import akka.stream.scaladsl.{Sink, Source, Flow}
+import akka.stream.scaladsl.Flow
 import com.firfi.slackbaka.SlackBaka.{BakaResponse, ChatMessage}
-import org.jboss.netty.handler.codec.marshalling.DefaultUnmarshallerProvider
 import spray.json.DefaultJsonProtocol
 
 import scala.concurrent.Future
@@ -19,7 +16,7 @@ import scala.concurrent.Future
 import akka.actor.{ActorSystem, ActorRef, Actor}
 import akka.event.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Failure, Success, Try, Random}
+import scala.util.{Failure, Success, Try}
 
 abstract class BakaLoader {
   def getWorkers:Set[Class[_]]
@@ -29,7 +26,7 @@ class BakaDispatcher(workers: Set[ActorRef]) extends Actor {
   val log = Logging(context.system, this)
   def receive = {
     case cm@ChatMessage(message, channel, user, ts) =>
-      workers.map((w) => w ! cm)
+      workers.foreach(w => w ! cm)
   }
 }
 
@@ -41,7 +38,7 @@ trait ImgurUtility extends SprayJsonSupport with DefaultJsonProtocol {
   import scala.concurrent.ExecutionContext.Implicits.global
   import spray.json._
 
-  private implicit val system = ActorSystem("Gelbooru")
+  private implicit val system: ActorSystem = ActorSystem("Gelbooru")
   private val IMGUR_ID = System.getenv("IMGUR_ID")
   private val IMGUR_SECRET = System.getenv("IMGUR_SECRET")
   private val scheme = "https://"

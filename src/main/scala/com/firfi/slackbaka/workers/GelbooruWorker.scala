@@ -7,20 +7,19 @@ import akka.http.scaladsl.marshallers.xml.ScalaXmlSupport
 import akka.http.scaladsl.unmarshalling._
 import akka.http.scaladsl.model.headers.Cookie
 import akka.stream.{ActorMaterializer, Materializer}
-
 import com.firfi.slackbaka.SlackBaka.ChatMessage
-
-import akka.actor.{ActorSystem, ActorRef}
+import akka.actor.{ActorRef, ActorSystem}
 
 import scala.concurrent.Future
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import akka.http.scaladsl.model.{HttpEntity, HttpResponse, HttpRequest}
+import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse}
 import akka.http.scaladsl.client.RequestBuilding
 import akka.http.scaladsl.model.StatusCodes._
 
 import scala.util.Random
+import scala.xml.Node
 
 object GelbooruLoader extends BakaLoader {
   override def getWorkers:Set[Class[_]] = {
@@ -56,7 +55,7 @@ class GelbooruWorker(responder: ActorRef) extends BakaRespondingWorker(responder
   }
 
   implicit val postsUnmarshaller: FromEntityUnmarshaller[Seq[Post]] =
-    defaultNodeSeqUnmarshaller.map(_ \ "post").map(l => l.map(p => (p \ "@sample_url", p \ "@tags")).map({case (url, tags) => Post(sampleUrl=url.text, tags=tags.text)}))
+    defaultNodeSeqUnmarshaller.map(_ \ "post").map(l => l.map((p: Node) => (p \ "@sample_url", p \ "@tags")).map({case (url, tags) => Post(sampleUrl=url.text, tags=tags.text)}))
 
   case class Post(sampleUrl: String, tags: String)
 

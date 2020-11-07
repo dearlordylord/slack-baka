@@ -1,11 +1,13 @@
 package com.firfi.slackbaka
 
-import akka.actor.{Actor, Props, ActorSystem}
+import akka.actor.{Actor, ActorSystem, BootstrapSetup, Props}
 import com.firfi.slackbaka.listeners.WelcomeListener
-import com.firfi.slackbaka.workers.{GelbooruLoader, HistoryLoader, PonyLoader, BakaDispatcher, NomadLoader}
+import com.firfi.slackbaka.workers.{BakaDispatcher, GelbooruLoader, HistoryLoader, NomadLoader, PonyLoader}
+import com.typesafe.config.Config
 import slack.api.SlackApiClient
 import slack.rtm.SlackRtmClient
-import scala.util.{Try, Success, Failure}
+
+import scala.util.{Failure, Success}
 import scala.concurrent.duration._
 
 
@@ -17,9 +19,10 @@ object SlackBaka {
   case class BakaResponse(message: String, channel: String)
   case class PrivateResponse(message: String, user: String)
 
-  implicit val system = ActorSystem("Baka")
+  implicit val system: ActorSystem = ActorSystem.create("Baka")
 
-  val workers = Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ GelbooruLoader.getWorkers ++ NomadLoader.getWorkers
+  val workers: Set[Class[_]] =
+    Set() ++ HistoryLoader.getWorkers ++ PonyLoader.getWorkers ++ GelbooruLoader.getWorkers ++ NomadLoader.getWorkers
 
   class BakaResponder(slackRtmClient: SlackRtmClient, slackApiClient: SlackApiClient) extends Actor {
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -40,12 +43,12 @@ object SlackBaka {
   def main(args: Array[String]) {
 
     val API_TOKEN = System.getenv("SLACK_TOKEN")
-    val client = SlackRtmClient(API_TOKEN, 30.seconds) // consistent timeouts on slow connection
+    val client = SlackRtmClient(API_TOKEN, duration=30.seconds) // consistent timeouts on slow connection
     val apiClient = SlackApiClient(API_TOKEN)
 
     val responder = system.actorOf(Props(new BakaResponder(client, apiClient)))
 
-    val dispatcher = system.actorOf(Props(new BakaDispatcher(workers.map((worker) => {
+    val dispatcher = system.actorOf(Props(new BakaDispatcher(workers.map(worker => {
       system.actorOf(Props(worker, responder))
     }))))
     client.onMessage { message =>
@@ -54,7 +57,7 @@ object SlackBaka {
 
     val state = client.state
     val generalId = state.getChannelIdForName("upwork")
-    generalId.map{id => client.addEventListener(system.actorOf(Props(new WelcomeListener(responder))))} // TODO generalise
+    generalId.foreach{ id => client.addEventListener(system.actorOf(Props(new WelcomeListener(responder))))} // TODO generalise
   }
 }
 
