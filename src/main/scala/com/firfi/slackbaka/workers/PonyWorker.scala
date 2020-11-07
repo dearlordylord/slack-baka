@@ -9,6 +9,12 @@ import scala.concurrent.Future
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 
+import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+
+case class PonyImageRepresentations(medium: String)
+case class PonyImage(representations: PonyImageRepresentations)
+case class PonyImagesResponse(images: Vector[PonyImage])
+
 object PonyLoader extends BakaLoader {
   override def getWorkers:Set[Class[_]] = {
     Set(classOf[PonyWorker])
@@ -17,7 +23,7 @@ object PonyLoader extends BakaLoader {
 
 class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
-  val API_ROOT = "https://derpibooru.org/"
+  val API_ROOT = "https://derpibooru.org/api/v1/json/"
 
   // comma-separated channek _IDS_
   val ponyAllowedChannels: Set[String] = commaEnvToSet("PONY_ALLOWED_CHANNELS")
@@ -25,14 +31,20 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
   val apiKey: Option[String] = Option(System.getenv("PONY_API_KEY"))
 
   def request(api: String, query: String = ""): Future[String] = {
-    val path = api + ".json?" + query
+    val path = api + "?" + query
+    println(API_ROOT + path)
     val svc = url(API_ROOT + path)
-    Http.default(svc OK as.String)
+    Http.default(svc OK as.String).recover({
+      case e =>
+        println("Error fetching derpibooru api posts")
+        println(e)
+        throw e
+    })
   }
 
   def searchQuery(tags: Seq[String], params: Map[String, String] = Map.empty): String = {
     val COMMA = "%2C"
-    val tagsString = tags.map((t) => {t.replace(' ', '+')}).mkString(COMMA)
+    val tagsString = tags.map(t => {t.replace(' ', '+')}).mkString(COMMA)
     (params ++
       Map[String, String](("q", tagsString)) ++
       apiKey.map(k => Map[String, String](("key", k))).getOrElse(Map.empty)).map({case (k, v) => k + "=" + v}).mkString("&")
@@ -51,18 +63,21 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
 
   val pattern = """(?i).*\bпони\b(.*)""".r
   override def handle(cm: ChatMessage): Future[Either[String, String]] = {
-    import scala.util.parsing.json._
     cm.message match {
       case pattern(tagsFollowingPony) if ponyAllowedChannels.contains(cm.channel) =>
         val extraTags = commaSeparatedToSet(tagsFollowingPony).map(encodeURIComponent) // and sanitize dat shit
-        request("search", randomQuery(extraTags)).map((res) => {
-          // num.zero
-          JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("id").toString.toFloat.toLong // TODO combinators
-        }) // TODO json parse errors
-        .flatMap((id) => {
-          request(id.toString)
-        }).map((res) => {
-          "https:" + JSON.parseFull(res).get.asInstanceOf[Map[String, Any]]("image").toString
+        request("search/posts", randomQuery(extraTags)).flatMap(res => {
+          val ponyImages = decode[PonyImagesResponse](res)
+          ponyImages match {
+            case Left(e) =>
+              println("error parsing ponyimages response")
+              println(e)
+              Future.failed(e)
+            case Right(i) => i.images match {
+              case a +: as => Future.successful(a.representations.medium)
+              case _ => Future.failed(new RuntimeException("No images found"))
+            }
+          }
         })
         .map(Right.apply)
       case _ => Future { Left("") }
