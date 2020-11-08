@@ -11,7 +11,7 @@ import ExecutionContext.Implicits.global
 
 import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
 
-case class PonyImageRepresentations(medium: String)
+case class PonyImageRepresentations(large: String)
 case class PonyImage(representations: PonyImageRepresentations)
 case class PonyImagesResponse(images: Vector[PonyImage])
 
@@ -66,7 +66,8 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
     cm.message match {
       case pattern(tagsFollowingPony) if ponyAllowedChannels.contains(cm.channel) =>
         val extraTags = commaSeparatedToSet(tagsFollowingPony).map(encodeURIComponent) // and sanitize dat shit
-        request("search/posts", randomQuery(extraTags)).flatMap(res => {
+        request("search/images", randomQuery(extraTags)).flatMap((res: String) => {
+          println(res)
           val ponyImages = decode[PonyImagesResponse](res)
           ponyImages match {
             case Left(e) =>
@@ -74,7 +75,7 @@ class PonyWorker(responder: ActorRef) extends BakaRespondingWorker(responder) {
               println(e)
               Future.failed(e)
             case Right(i) => i.images match {
-              case a +: as => Future.successful(a.representations.medium)
+              case a +: as => Future.successful(a.representations.large)
               case _ => Future.failed(new RuntimeException("No images found"))
             }
           }
