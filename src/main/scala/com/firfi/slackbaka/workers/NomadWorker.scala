@@ -85,7 +85,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
 
   def migration() = { // data migration example. could be useful
     println("MIGRATION!!!")
-    implicit val ord = new Ordering[Geoname] {
+    implicit val ord: Ordering[Geoname] = new Ordering[Geoname] {
       def compare(i: Geoname, j: Geoname) = scala.math.Ordering.String.compare(i.name, j.name)
     }
     (for {
@@ -141,8 +141,10 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       }
     }
     r.right.map {
-      case Some(geoname) if getName(geoname, place) == place.name => Right(geoname)
-      case Some(geoname) => Left(s"No ${place.typeName} name ${place.name} in database. You meant ${getName(geoname, place)}?"->Some(geoname))
+      case Some(geoname) if getName(geoname, place).toUpperCase == place.name.toUpperCase => Right(geoname)
+      case Some(geoname) =>
+        Left(
+          s"No ${place.typeName} name ${place.name} in database. You meant ${getName(geoname, place)}?"->Some(geoname))
       case None => Left(s"No ${place.typeName} with name ${place.name} found"->None)
     }
   }
@@ -208,13 +210,12 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
   override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[String, String]] = {
       getNomadPlace(geoname, placeName).map({
-        case nomads@(n :: ns) => {
+        case nomads@(n :: ns) =>
           responder ! PrivateResponse((List(s"Nomads in ${placeName.typeName} ${geoname.name}:") ::: nomads.sortBy(_.city).map(n => placeName match {
             case CityName(_) => n.user.toSlackMention
             case CountryName(_) => s"${n.user.toSlackMention}: ${n.city}"
           })).mkString("\n"), cm.user)
           Right(s"Nomads in ${placeName.typeName} ${geoname.name} sent to your PM. Nomads count: ${nomads.length}")
-        }
         case _ => Right(s"There's no nomads in ${placeName.typeName} ${geoname.name}")
       }).map({
         case Right(msg) if warning.nonEmpty => Right(List(warning.get, msg).mkString("\n\n"))

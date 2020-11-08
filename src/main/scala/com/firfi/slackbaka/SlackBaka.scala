@@ -1,9 +1,8 @@
 package com.firfi.slackbaka
 
-import akka.actor.{Actor, ActorSystem, BootstrapSetup, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import com.firfi.slackbaka.listeners.WelcomeListener
 import com.firfi.slackbaka.workers.{BakaDispatcher, GelbooruLoader, HistoryLoader, NomadLoader, PonyLoader}
-import com.typesafe.config.Config
 import slack.api.SlackApiClient
 import slack.rtm.SlackRtmClient
 
