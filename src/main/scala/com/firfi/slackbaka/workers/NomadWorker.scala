@@ -239,7 +239,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     cm.message match {
       case setCityPattern(cityName) => checkGeonameThen(CityName(cityName.trim),
         (geoname, _: CityName, error) => error match {
-          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set.")).recoverWith {
+          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set. :coffin-dance:")).recoverWith {
             case e: Exception => println(e); Future.successful(Left(e.getMessage))
           }
           case Some(msg) => Future.successful(Right(msg))
