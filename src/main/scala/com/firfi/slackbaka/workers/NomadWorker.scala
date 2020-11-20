@@ -209,7 +209,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     }
 
   def cityEmojiSring(geoname: Geoname): String =
-    if ("Chiang Mai".equals(geoname.countryName)) "" else " :coffin-dance:"
+    if ("Thailand".equals(geoname.countryName)) "" else " :coffin-dance:"
 
   override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[String, String]] = {
