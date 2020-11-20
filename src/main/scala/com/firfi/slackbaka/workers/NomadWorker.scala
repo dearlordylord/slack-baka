@@ -207,6 +207,10 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       }
       case Left(e) => Future.successful(Left(e))
     }
+
+  def cityEmojiSring(geoname: Geoname): String =
+    if ("Chiang Mai".equals(geoname.countryName)) "" else " :coffin-dance:"
+
   override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[String, String]] = {
       getNomadPlace(geoname, placeName).map({
@@ -239,7 +243,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
     cm.message match {
       case setCityPattern(cityName) => checkGeonameThen(CityName(cityName.trim),
         (geoname, _: CityName, error) => error match {
-          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set. :coffin-dance:")).recoverWith {
+          case None => setNomadCity(cm, geoname).map(_ => Right(s"City ${geoname.name} set.${cityEmojiSring(geoname)}")).recoverWith {
             case e: Exception => println(e); Future.successful(Left(e.getMessage))
           }
           case Some(msg) => Future.successful(Right(msg))
