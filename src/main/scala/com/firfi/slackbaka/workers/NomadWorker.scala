@@ -85,9 +85,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
 
   def migration() = { // data migration example. could be useful
     println("MIGRATION!!!")
-    implicit val ord: Ordering[Geoname] = new Ordering[Geoname] {
-      def compare(i: Geoname, j: Geoname) = scala.math.Ordering.String.compare(i.name, j.name)
-    }
+    implicit val ord: Ordering[Geoname] = (i: Geoname, j: Geoname) => scala.math.Ordering.String.compare(i.name, j.name)
     (for {
       c <- getNomadCitiesCollection()
       r <- c.find(BSONDocument()).cursor[MongoGeorecord]().collect[List]()
@@ -208,8 +206,7 @@ class NomadWorker(responder: ActorRef) extends BakaRespondingWorker(responder) w
       case Left(e) => Future.successful(Left(e))
     }
 
-  def cityEmojiSring(geoname: Geoname): String =
-    if ("Thailand".equals(geoname.countryName)) "" else " :coffin-dance:"
+  def cityEmojiSring(geoname: Geoname): String = if ("Thailand".equals(geoname.countryName)) "" else " :coffin-dance:"
 
   override def handle(cm: ChatMessage): Future[Either[String, String]] = {
     def nomadsResponse(geoname: Geoname, placeName: PlaceName, warning: Option[String]): Future[Either[String, String]] = {

@@ -26,7 +26,7 @@ libraryDependencies ++= {
   Seq(
     "com.typesafe.akka" %% "akka-actor" % "2.6.10",
     "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2",
-    "org.reactivemongo" %% "reactivemongo" % "1.0.0",
+    "org.reactivemongo" %% "reactivemongo" % "1.0.3",
     "com.github.slack-scala-client" %% "slack-scala-client" % "0.2.11",
 //    "io.netty" % "netty" % "3.6.3.Final" force(),
     "io.lemonlabs" %% "scala-uri" % "3.0.0",
