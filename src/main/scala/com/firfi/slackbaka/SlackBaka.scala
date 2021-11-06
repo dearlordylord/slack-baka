@@ -50,9 +50,10 @@ object SlackBaka {
     val dispatcher = system.actorOf(Props(new BakaDispatcher(workers.map(worker => {
       system.actorOf(Props(worker, responder))
     }))))
-    client.onMessage { message =>
-      dispatcher ! ChatMessage(message.text, message.channel, message.user, message.ts)
-    }
+    client.onMessage { message => message.user match {
+      case None => println(s"no user for message ${message.text}");
+      case Some(user) => dispatcher ! ChatMessage(message.text, message.channel, user, message.ts)
+    } }
 
     val state = client.state
     val generalId = state.getChannelIdForName("upwork")
