@@ -33,7 +33,10 @@ object SlackBaka {
           case Success(c: String) =>
             slackRtmClient.sendMessage(c, message)
             slackApiClient.closeIm(c)
-          case Failure(f) => println(f)
+          case Failure(f) => {
+            println("TEST")
+            println(f)
+          }
         }
 
     }
