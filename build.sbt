@@ -45,6 +45,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser"
 ).map(_ % circeVersion)
 
-lazy val slackClientCustom = RootProject(uri("https://github.com/Firfi/slack-scala-client.git#master"))
+// point to the latest commit at the moment; they haven't updated their build yet
+lazy val slackClientCustom = RootProject(uri("https://github.com/slack-scala-client/slack-scala-client.git#9a04762df15913f366d810a865e6f9a0b0edc779"))
 
 val main = Project(id = "slack-baka", base = file(".")).dependsOn(slackClientCustom)
