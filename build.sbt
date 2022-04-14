@@ -16,7 +16,7 @@ resolvers += ("Akka Snapshot Repository" at "https://repo.akka.io/snapshots/")
 libraryDependencies ++= {
 //  val akkaV       = "2.4.1"
   val akkaStreamV = "2.6.17"
-  val akkaHttpV = "10.2.8"
+  val akkaHttpV = "10.2.9"
 //  val scalaTestV  = "2.2.5"
   val akkadeps = Seq(
     "com.typesafe.akka" %% "akka-stream"                          % akkaStreamV,
