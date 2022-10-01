@@ -57,10 +57,7 @@ object SlackBaka {
       case None => println(s"no user for message ${message.text}");
       case Some(user) => dispatcher ! ChatMessage(message.text, message.channel, user, message.ts)
     } }
-
-    val state = client.state
-    val generalId = state.getChannelIdForName("upwork")
-    generalId.foreach{ id => client.addEventListener(system.actorOf(Props(new WelcomeListener(responder))))} // TODO generalise
+    client.addEventListener(system.actorOf(Props(new WelcomeListener(responder))))
   }
 }
 
